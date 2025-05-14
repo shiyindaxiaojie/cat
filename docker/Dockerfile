@@ -1,7 +1,7 @@
 FROM tomcat:8.5.78-jdk8
 
 LABEL maintainer="梦想歌 <shiyindaxiaojie@gmail.com>"
-LABEL version="3.4.1"
+LABEL version="3.4.2"
 
 ENV HOME "/data"
 ENV TZ "Asia/Shanghai"

@@ -41,19 +41,19 @@ resolve_dns() {
     echo "${ips[@]}"
 }
 
-SERVER_URLS=${SERVER_URLS:-}
-if [[ -z "${SERVER_URLS}" ]]; then
-    echo "SERVER_URLS not specified, using Pod IP"
+SERVER_URL=${SERVER_URL:-}
+if [[ -z "${SERVER_URL}" ]]; then
+    echo "SERVER_URL not specified, using Pod IP"
     POD_IP=$(determine_pod_ip)
     if [[ -z "${POD_IP}" ]]; then
-        echo "ERROR: Unable to determine Pod IP. Please set SERVER_URLS manually."
+        echo "ERROR: Unable to determine Pod IP. Please set SERVER_URL manually."
         exit 1
     fi
-    SERVER_URLS="${POD_IP}"
+    SERVER_URL="${POD_IP}"
 fi
 
 declare -a FINAL_IPS
-IFS=',' read -ra URL_ARRAY <<< "${SERVER_URLS}"
+IFS=',' read -ra URL_ARRAY <<< "${SERVER_URL}"
 
 for url in "${URL_ARRAY[@]}"; do
     url=$(echo "${url}" | xargs)

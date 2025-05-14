@@ -7,6 +7,12 @@
 		<th width="10%">发布时间</th>
 	</tr>
 	<tr>
+		<td>3.4.2</td>
+		<td>优化 CAT 集群部署，修复 MySQL 兼容 MySQL8</td>
+		<td>梦想歌</td>
+		<td>2025-05-14</td>
+	</tr>
+	<tr>
 		<td>3.4.1</td>
 		<td>修复 HeartBeat 监控告警交互问题</td>
 		<td>梦想歌</td>

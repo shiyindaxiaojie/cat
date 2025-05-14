@@ -24,7 +24,6 @@
       <consumer>
          <long-config default-url-threshold="1000" default-sql-threshold="100" default-service-threshold="50">
             <domain name="cat" url-threshold="500" sql-threshold="500"/>
-            <domain name="OpenPlatformWeb" url-threshold="100" sql-threshold="500"/>
          </long-config>
       </consumer>
    </server>
