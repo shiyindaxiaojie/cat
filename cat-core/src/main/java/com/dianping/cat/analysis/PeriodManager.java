@@ -27,6 +27,7 @@ import org.unidal.helper.Threads.Task;
 import org.unidal.lookup.annotation.Inject;
 
 import com.dianping.cat.Cat;
+import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.statistic.ServerStatisticManager;
 
 public class PeriodManager implements Task {
@@ -44,15 +45,18 @@ public class PeriodManager implements Task {
 	@Inject
 	private ServerStatisticManager m_serverStateManager;
 
+	private ServerConfigManager m_serverConfigManager;
+
 	@Inject
 	private Logger m_logger;
 
 	public PeriodManager(long duration, MessageAnalyzerManager analyzerManager,	ServerStatisticManager serverStateManager,
-							Logger logger) {
+							ServerConfigManager serverConfigManager, Logger logger) {
 		m_strategy = new PeriodStrategy(duration, EXTRATIME, EXTRATIME);
 		m_active = true;
 		m_analyzerManager = analyzerManager;
 		m_serverStateManager = serverStateManager;
+		m_serverConfigManager = serverConfigManager;
 		m_logger = logger;
 	}
 
@@ -123,7 +127,7 @@ public class PeriodManager implements Task {
 
 	private void startPeriod(long startTime) {
 		long endTime = startTime + m_strategy.getDuration();
-		Period period = new Period(startTime, endTime, m_analyzerManager, m_serverStateManager, m_logger);
+		Period period = new Period(startTime, endTime, m_analyzerManager, m_serverStateManager, m_serverConfigManager, m_logger);
 
 		m_periods.add(period);
 		period.start();

@@ -7,6 +7,12 @@
          <property name="send-machine" value="false"/>
          <property name="alarm-machine" value="false"/>
          <property name="hdfs-enabled" value="false"/>
+         <property name="realtime-analyzer-queue-size" value="10000"/>
+         <property name="business-analyzer-enable" value="true"/>
+         <property name="matrix-analyzer-enable" value="true"/>
+         <property name="dependency-analyzer-enable" value="true"/>
+         <property name="top-analyzer-enable" value="true"/>
+         <property name="storage-analyzer-enable" value="true"/>
          <property name="remote-servers" value="127.0.0.1:8080"/>
       </properties>
       <storage local-base-dir="/data/appdatas/cat/bucket/" max-hdfs-storage-time="15" local-report-storage-time="2" local-logivew-storage-time="1" har-mode="true" upload-thread="5">
@@ -24,7 +30,6 @@
       <consumer>
          <long-config default-url-threshold="1000" default-sql-threshold="100" default-service-threshold="50">
             <domain name="cat" url-threshold="500" sql-threshold="500"/>
-            <domain name="OpenPlatformWeb" url-threshold="100" sql-threshold="500"/>
          </long-config>
       </consumer>
    </server>

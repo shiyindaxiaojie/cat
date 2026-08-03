@@ -30,6 +30,8 @@ import org.unidal.lookup.annotation.Inject;
 import org.unidal.lookup.annotation.Named;
 
 import com.dianping.cat.Cat;
+import com.dianping.cat.config.server.ServerConfigManager;
+import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.Message;
 import com.dianping.cat.message.MessageProducer;
 import com.dianping.cat.message.Transaction;
@@ -49,6 +51,9 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 	@Inject
 	private ServerStatisticManager m_serverStateManager;
 
+	@Inject
+	private ServerConfigManager m_serverConfigManager;
+
 	private PeriodManager m_periodManager;
 
 	private Logger m_logger;
@@ -59,9 +64,12 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 		Period period = m_periodManager.findPeriod(timestamp);
 
 		if (period != null) {
-			period.distribute(tree);
+			if (!period.distribute(tree)) {
+				BufReleaseHelper.release(tree.getBuffer());
+			}
 		} else {
 			m_serverStateManager.addNetworkTimeError(1);
+			BufReleaseHelper.release(tree.getBuffer());
 		}
 	}
 
@@ -131,7 +139,7 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 
 	@Override
 	public void initialize() throws InitializationException {
-		m_periodManager = new PeriodManager(HOUR, m_analyzerManager, m_serverStateManager, m_logger);
+		m_periodManager = new PeriodManager(HOUR, m_analyzerManager, m_serverStateManager, m_serverConfigManager, m_logger);
 		m_periodManager.init();
 
 		Threads.forGroup("cat").start(m_periodManager);

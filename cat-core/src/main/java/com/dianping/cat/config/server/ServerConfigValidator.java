@@ -20,12 +20,29 @@ package com.dianping.cat.config.server;
 
 import com.dianping.cat.configuration.server.entity.ConsumerConfig;
 import com.dianping.cat.configuration.server.entity.LongConfig;
+import com.dianping.cat.configuration.server.entity.Property;
 import com.dianping.cat.configuration.server.entity.Server;
 import com.dianping.cat.configuration.server.entity.ServerConfig;
 import com.dianping.cat.configuration.server.entity.StorageConfig;
 import com.dianping.cat.configuration.server.transform.DefaultValidator;
 
 public class ServerConfigValidator extends DefaultValidator {
+	private static final String[] OPTIONAL_ANALYZERS = { "business", "matrix", "dependency", "top", "storage" };
+
+	private void addPropertyIfAbsent(Server server, String name, String value) {
+		if (server.findProperty(name) == null) {
+			server.addProperty(new Property(name).setValue(value));
+		}
+	}
+
+	private void initializeAnalyzerProperties(Server server) {
+		addPropertyIfAbsent(server, ServerConfigManager.REALTIME_ANALYZER_QUEUE_SIZE,
+						String.valueOf(ServerConfigManager.DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE));
+
+		for (String analyzer : OPTIONAL_ANALYZERS) {
+			addPropertyIfAbsent(server, analyzer + "-analyzer-enable", "true");
+		}
+	}
 
 	@Override
 	public void visitServerConfig(ServerConfig serverConfig) {
@@ -46,6 +63,8 @@ public class ServerConfigValidator extends DefaultValidator {
 				defaultServer.setConsumer(new ConsumerConfig());
 			}
 		}
+
+		initializeAnalyzerProperties(serverConfig.findServer(ServerConfigManager.DEFAULT));
 
 		super.visitServerConfig(serverConfig);
 	}

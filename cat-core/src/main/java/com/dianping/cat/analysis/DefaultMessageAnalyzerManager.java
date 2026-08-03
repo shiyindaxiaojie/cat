@@ -33,7 +33,6 @@ import org.unidal.lookup.ContainerHolder;
 import org.unidal.lookup.annotation.Named;
 
 import com.dianping.cat.Cat;
-import com.dianping.cat.config.server.ServerConfigManager;
 
 @Named(type = MessageAnalyzerManager.class)
 public class DefaultMessageAnalyzerManager extends ContainerHolder
@@ -147,18 +146,6 @@ public class DefaultMessageAnalyzerManager extends ContainerHolder
 			}
 		});
 
-		ServerConfigManager manager = lookup(ServerConfigManager.class);
-		List<String> disables = new ArrayList<String>();
-
-		for (String name : m_analyzerNames) {
-
-			if (!manager.getEnableOfRealtimeAnalyzer(name)) {
-				disables.add(name);
-			}
-		}
-		for (String name : disables) {
-			m_analyzerNames.remove(name);
-		}
 	}
 
 	@Override

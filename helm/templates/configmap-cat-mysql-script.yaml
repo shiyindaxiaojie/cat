@@ -1,7 +1,8 @@
+{{- if .Values.cat.mysql.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cat-mysql-script
+  name: {{ include "cat.mysql.name" . }}-script
   namespace: {{ .Release.Namespace }}
 data:
   cat-init.sql: |
@@ -309,3 +310,4 @@ data:
           PRIMARY KEY (`id`),
           KEY `updatetime` (`updatetime`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='系统告警的配置';
+{{- end }}

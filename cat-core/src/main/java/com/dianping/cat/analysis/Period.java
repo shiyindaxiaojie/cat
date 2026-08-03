@@ -31,14 +31,13 @@ import org.unidal.helper.Threads;
 import org.unidal.lookup.annotation.Inject;
 
 import com.dianping.cat.Cat;
+import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.message.io.DefaultMessageQueue;
 import com.dianping.cat.message.spi.MessageQueue;
 import com.dianping.cat.message.spi.MessageTree;
 import com.dianping.cat.statistic.ServerStatisticManager;
 
 public class Period {
-	private static final int QUEUE_SIZE = 30000;
-
 	private long m_startTime;
 
 	private long m_endTime;
@@ -54,22 +53,30 @@ public class Period {
 	@Inject
 	private Logger m_logger;
 
+	private ServerConfigManager m_serverConfigManager;
+
 	public Period(long startTime, long endTime, MessageAnalyzerManager analyzerManager,
-							ServerStatisticManager serverStateManager, Logger logger) {
+							ServerStatisticManager serverStateManager, ServerConfigManager serverConfigManager, Logger logger) {
 		m_startTime = startTime;
 		m_endTime = endTime;
 		m_analyzerManager = analyzerManager;
 		m_serverStateManager = serverStateManager;
+		m_serverConfigManager = serverConfigManager;
 		m_logger = logger;
 
 		List<String> names = m_analyzerManager.getAnalyzerNames();
 
 		m_tasks = new HashMap<String, List<PeriodTask>>();
 		for (String name : names) {
+			if (!m_serverConfigManager.getEnableOfRealtimeAnalyzer(name)) {
+				continue;
+			}
+
 			List<MessageAnalyzer> messageAnalyzers = m_analyzerManager.getAnalyzer(name, startTime);
+			int queueSize = m_serverConfigManager.getQueueSizeOfRealtimeAnalyzer(name);
 
 			for (MessageAnalyzer analyzer : messageAnalyzers) {
-				MessageQueue queue = new DefaultMessageQueue(QUEUE_SIZE);
+				MessageQueue queue = new DefaultMessageQueue(queueSize);
 				PeriodTask task = new PeriodTask(analyzer, queue, startTime);
 
 				task.enableLogging(m_logger);
@@ -85,8 +92,9 @@ public class Period {
 		}
 	}
 
-	public void distribute(MessageTree tree) {
+	public boolean distribute(MessageTree tree) {
 		m_serverStateManager.addMessageTotal(tree.getDomain(), 1);
+		boolean bufferTransferred = false;
 		boolean success = true;
 		String domain = tree.getDomain();
 
@@ -114,6 +122,10 @@ public class Period {
 					success = false;
 				}
 			}
+
+			if ("dump".equals(entry.getKey()) && enqueue) {
+				bufferTransferred = true;
+			}
 		}
 
 		if ((!success) && (!tree.isProcessLoss())) {
@@ -121,6 +133,8 @@ public class Period {
 
 			tree.setProcessLoss(true);
 		}
+
+		return bufferTransferred;
 	}
 
 	public void finish() {
