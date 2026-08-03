@@ -43,6 +43,7 @@ import com.dianping.cat.Cat;
 import com.dianping.cat.CatConstants;
 import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.helper.TimeHelper;
+import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.internal.MessageId;
 import com.dianping.cat.message.spi.MessageTree;
 import com.dianping.cat.statistic.ServerStatisticManager;
@@ -153,12 +154,12 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 
 		if (!success) {
 			m_statisticManager.addMessageDumpLoss(1);
+			BufReleaseHelper.release(tree.getBuffer());
 
 			if ((m_failCount.incrementAndGet() % 100) == 0) {
 				Cat.logError(new MessageQueueFullException("Error when adding message to queue, fails: " + m_failCount));
 
 				m_logger.info("message tree queue is full " + m_failCount + " index " + index);
-				// tree.getBuffer().release();
 			}
 		} else {
 			m_statisticManager.addMessageSize(domain, tree.getBuffer().readableBytes());

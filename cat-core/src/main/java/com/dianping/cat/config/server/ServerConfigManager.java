@@ -50,6 +50,9 @@ import java.util.regex.Pattern;
 
 @Named
 public class ServerConfigManager implements LogEnabled, Initializable {
+	static final int DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE = 10000;
+
+	public static final String REALTIME_ANALYZER_QUEUE_SIZE = "realtime-analyzer-queue-size";
 
 	public static final String DUMP_DIR = "dump";
 
@@ -312,6 +315,34 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 
 	public int getMessageProcessorThreads() {
 		return Integer.parseInt(getProperty("message-processor-thread", "20"));
+	}
+
+	public int getQueueSizeOfRealtimeAnalyzer(String name) {
+		String defaultQueueSize = getProperty(REALTIME_ANALYZER_QUEUE_SIZE,
+							String.valueOf(DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE));
+		int fallbackQueueSize = parsePositiveInt(defaultQueueSize, DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE);
+		String queueSize = getProperty(name + "-analyzer-queue-size", defaultQueueSize);
+		int value = parsePositiveInt(queueSize, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid realtime analyzer queue size(%s) for %s, using %s.", queueSize, name,
+								fallbackQueueSize));
+		}
+		return fallbackQueueSize;
+	}
+
+	private int parsePositiveInt(String value, int defaultValue) {
+		try {
+			int parsed = Integer.parseInt(value);
+
+			return parsed > 0 ? parsed : defaultValue;
+		} catch (NumberFormatException e) {
+			return defaultValue;
+		}
 	}
 
 	public ExecutorService getModelServiceExecutorService() {

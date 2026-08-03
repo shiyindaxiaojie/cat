@@ -5,69 +5,85 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "cat.module.labels" . | nindent 4 }}
-    {{- with .Values.cat.server.labels }}
-        {{- toYaml . | nindent 6 }}
-    {{- end }}
 spec:
-  updateStrategy: 
-    type: 
-  serviceName: {{ include "cat.server.name" . }}
-  replicas: 1
+  serviceName: {{ include "cat.server.headlessName" . }}
+  podManagementPolicy: Parallel
+  replicas: {{ .Values.cat.server.replicas }}
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       {{- include "cat.server.selectorLabels" . | nindent 6 }}
-  volumeClaimTemplates:
-  - metadata:
-      name: bucket-data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      {{- with .Values.cat.storageClassName }}
-      storageClassName: {{ . | quote }}
-      {{- end }}
-      resources:
-        requests:
-          storage: {{ .Values.cat.server.pvc.storage | default "15G" }}
   template:
     metadata:
-    {{- with .Values.cat.server.podAnnotations }}
+      {{- with .Values.cat.server.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}
       labels:
         {{- include "cat.server.selectorLabels" . | nindent 8 }}
     spec:
-      {{- if .Values.serviceAccount.create -}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ include "cat.serviceAccountName" . }}
+      {{- with .Values.cat.server.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ include "cat.server.name" . }}
+        - name: cat-server
           image: "{{ .Values.cat.server.image.repository }}:{{ .Values.cat.server.image.tag }}"
-          volumeMounts:
-          - name: cat-client-xml
-            mountPath: /data/appdatas/cat/client.xml
-            subPath: client.xml
-          - name: bucket-data
-            mountPath: /data/appdatas/cat/bucket
+          imagePullPolicy: {{ .Values.cat.server.image.pullPolicy }}
+          {{- with .Values.cat.server.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
-          - name: TZ
-            value: Asia/Shanghai
-          - name: MYSQL_URL
-            {{- if .Values.cat.server.mysql.host }}
-            value: {{ .Values.cat.server.mysql.host }}
-            {{- else }}
-            value: "{{ include "cat.mysql.name" . }}-0.{{ include "cat.mysql.name" . }}.{{ .Release.Namespace }}.svc.cluster.local" 
-            {{- end }}
-          - name: MYSQL_PORT
-            value: {{ .Values.cat.server.mysql.port | default "3306" | quote }}
-          - name: MYSQL_USERNAME
-            value: {{ .Values.cat.server.mysql.user | default "root" }}
-          - name: MYSQL_PASSWD
-            valueFrom:
-              secretKeyRef:
-                name: cat-secret
-                key: MYSQL_PASSWORD
-          - name: MYSQL_SCHEMA
-            value: {{ .Values.cat.mysql.database | default "cat" }}
+            - name: TZ
+              value: Asia/Shanghai
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVER_URL
+              value: {{ include "cat.server.url" . | quote }}
+            - name: RESOLVE_SERVER_URL
+              value: "N"
+            - name: MYSQL_URL
+              value: {{ include "cat.mysql.host" . | quote }}
+            - name: MYSQL_PORT
+              value: {{ .Values.cat.server.mysql.port | quote }}
+            - name: MYSQL_USERNAME
+              value: {{ .Values.cat.server.mysql.user | quote }}
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "cat.secret.name" . }}
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_SCHEMA
+              value: {{ include "cat.mysql.schema" . | quote }}
+            - name: XMS
+              value: {{ .Values.cat.server.jvm.xms | quote }}
+            - name: XMX
+              value: {{ .Values.cat.server.jvm.xmx | quote }}
+            - name: XSS
+              value: {{ .Values.cat.server.jvm.xss | quote }}
+            - name: GC_MODE
+              value: {{ .Values.cat.server.jvm.gcMode | quote }}
+            - name: MAX_GC_PAUSE_MILLIS
+              value: {{ .Values.cat.server.jvm.maxGcPauseMillis | quote }}
+            - name: USE_GC_LOG
+              value: {{ .Values.cat.server.jvm.useGcLog | quote }}
+            - name: USE_HEAP_DUMP
+              value: {{ .Values.cat.server.jvm.useHeapDump | quote }}
+            - name: USE_ALWAYS_PRETOUCH
+              value: {{ .Values.cat.server.jvm.useAlwaysPretouch | quote }}
+            - name: USE_STRING_DEDUPLICATION
+              value: {{ .Values.cat.server.jvm.useStringDeduplication | quote }}
+            - name: PRINT_JVM_FLAGS
+              value: {{ .Values.cat.server.jvm.printJvmFlags | quote }}
           ports:
             - name: http
               containerPort: 8080
@@ -77,43 +93,57 @@ spec:
               protocol: TCP
           livenessProbe:
             tcpSocket:
-              port: 8080
-            initialDelaySeconds: {{ .Values.cat.server.livenessProbe.initialDelaySeconds | default 60 }}
-            periodSeconds: {{ .Values.cat.server.livenessProbe.periodSeconds | default 5 }}
-            timeoutSeconds: {{ .Values.cat.server.livenessProbe.timeoutSeconds | default 2 }}
-            successThreshold: {{ .Values.cat.server.livenessProbe.successThreshold | default 1 }}
-            failureThreshold: {{ .Values.cat.server.livenessProbe.failureThreshold | default 5 }}
+              port: http
+            initialDelaySeconds: {{ .Values.cat.server.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.cat.server.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.cat.server.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.cat.server.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.cat.server.livenessProbe.failureThreshold }}
           readinessProbe:
             tcpSocket:
-              port: 8080
-            periodSeconds: {{ .Values.cat.server.readinessProbe.periodSeconds | default 5 }}
-            timeoutSeconds: {{ .Values.cat.server.readinessProbe.timeoutSeconds | default 2 }}
-            successThreshold: {{ .Values.cat.server.readinessProbe.successThreshold | default 1 }}
-            failureThreshold: {{ .Values.cat.server.readinessProbe.failureThreshold | default 3 }}
-          {{- with .Values.cat.server.resources }}
+              port: http
+            initialDelaySeconds: {{ .Values.cat.server.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.cat.server.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.cat.server.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.cat.server.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.cat.server.readinessProbe.failureThreshold }}
           resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      volumes:
-        - name: cat-client-xml
-          configMap:
-            name: cat-client-xml
-      terminationGracePeriodSeconds: {{ .Values.cat.server.terminationGracePeriodSeconds | default 30  }}
+            {{- toYaml .Values.cat.server.resources | nindent 12 }}
+          volumeMounts:
+            - name: bucket-data
+              mountPath: /data/appdatas/cat/bucket
+      terminationGracePeriodSeconds: {{ .Values.cat.server.terminationGracePeriodSeconds }}
       {{- with .Values.cat.server.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.cat.server.affinity }}
+      affinity:
+        {{- toYaml .Values.cat.server.affinity | nindent 8 }}
+      {{- else if .Values.cat.server.podAntiAffinity }}
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                - {{ include "cat.server.name" . }}
-            topologyKey: kubernetes.io/hostname	
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "cat.server.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
+      {{- end }}
       {{- with .Values.cat.server.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: bucket-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- with .Values.cat.server.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.cat.server.pvc.storage }}

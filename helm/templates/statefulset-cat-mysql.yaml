@@ -1,3 +1,4 @@
+{{- if .Values.cat.mysql.enabled }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -5,117 +6,113 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "cat.module.labels" . | nindent 4 }}
-    {{- with .Values.cat.mysql.labels }}
-        {{- toYaml . | nindent 6 }}
-    {{- end }}
 spec:
-  updateStrategy: 
-    type: 
   serviceName: {{ include "cat.mysql.name" . }}
   replicas: 1
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       {{- include "cat.mysql.selectorLabels" . | nindent 6 }}
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      {{- with .Values.cat.mysql.storageClassName }}
-      storageClassName: {{ . | quote }}
-      {{- end }}
-      resources:
-        requests:
-          storage: {{ .Values.cat.mysql.pvc.storage | default "5G" }}
   template:
     metadata:
-    {{- with .Values.cat.mysql.podAnnotations }}
+      {{- with .Values.cat.mysql.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
-    {{- end }}
+      {{- end }}
       labels:
         {{- include "cat.mysql.selectorLabels" . | nindent 8 }}
     spec:
-      {{- if .Values.serviceAccount.create -}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ include "cat.serviceAccountName" . }}
+      {{- with .Values.cat.mysql.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ include "cat.mysql.name" . }}
+        - name: mysql
           image: "{{ .Values.cat.mysql.image.repository }}:{{ .Values.cat.mysql.image.tag }}"
-          volumeMounts:
-          - name: data
-            mountPath: /var/lib/mysql
-          - name: cat-mysql-script
-            mountPath: /docker-entrypoint-initdb.d
+          imagePullPolicy: {{ .Values.cat.mysql.image.pullPolicy }}
+          args:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+          {{- with .Values.cat.mysql.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
-          - name: TZ
-            value: Asia/Shanghai
-          - name: MYSQL_DATABASE
-            value: {{ .Values.cat.mysql.database | default "cat" }}
-          - name: MYSQL_ROOT_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: cat-secret
-                key: MYSQL_PASSWORD
+            - name: TZ
+              value: Asia/Shanghai
+            - name: MYSQL_DATABASE
+              value: {{ .Values.cat.mysql.database | quote }}
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "cat.secret.name" . }}
+                  key: MYSQL_PASSWORD
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "cat.secret.name" . }}
+                  key: MYSQL_PASSWORD
           ports:
-            - name: tcp 
-              containerPort: {{ .Values.cat.mysql.port | default 3306 }}
+            - name: mysql
+              containerPort: {{ .Values.cat.mysql.port }}
               protocol: TCP
           livenessProbe:
             exec:
-              command:
-                - /bin/bash
-                - -ec
-                - |
-                  password_aux="${MYSQL_ROOT_PASSWORD:-}"
-                  if [[ -f "${MYSQL_ROOT_PASSWORD_FILE:-}" ]]; then
-                      password_aux=$(cat "$MYSQL_ROOT_PASSWORD_FILE")
-                  fi
-                  mysqladmin status -uroot -p"${password_aux}"
-            initialDelaySeconds: {{ .Values.cat.mysql.livenessProbe.initialDelaySeconds | default 60 }}
-            periodSeconds: {{ .Values.cat.mysql.livenessProbe.periodSeconds | default 5 }}
-            timeoutSeconds: {{ .Values.cat.mysql.livenessProbe.timeoutSeconds | default 2 }}
-            successThreshold: {{ .Values.cat.mysql.livenessProbe.successThreshold | default 1 }}
-            failureThreshold: {{ .Values.cat.mysql.livenessProbe.failureThreshold | default 5 }}
+              command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "--silent"]
+            initialDelaySeconds: {{ .Values.cat.mysql.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.cat.mysql.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.cat.mysql.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.cat.mysql.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.cat.mysql.livenessProbe.failureThreshold }}
           readinessProbe:
             exec:
-              command:
-                - /bin/bash
-                - -ec
-                - |
-                  password_aux="${MYSQL_ROOT_PASSWORD:-}"
-                  if [[ -f "${MYSQL_ROOT_PASSWORD_FILE:-}" ]]; then
-                      password_aux=$(cat "$MYSQL_ROOT_PASSWORD_FILE")
-                  fi
-                  mysqladmin status -uroot -p"${password_aux}"
-            periodSeconds: {{ .Values.cat.mysql.readinessProbe.periodSeconds | default 5 }}
-            timeoutSeconds: {{ .Values.cat.mysql.readinessProbe.timeoutSeconds | default 2 }}
-            successThreshold: {{ .Values.cat.mysql.readinessProbe.successThreshold | default 1 }}
-            failureThreshold: {{ .Values.cat.mysql.readinessProbe.failureThreshold | default 3 }}
-          {{- with .Values.cat.mysql.resources }}
+              command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "--silent"]
+            initialDelaySeconds: {{ .Values.cat.mysql.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.cat.mysql.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.cat.mysql.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.cat.mysql.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.cat.mysql.readinessProbe.failureThreshold }}
           resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      terminationGracePeriodSeconds: {{ .Values.cat.mysql.terminationGracePeriodSeconds | default 30 }}
+            {{- toYaml .Values.cat.mysql.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: cat-mysql-script
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
       volumes:
-      - name: cat-mysql-script
-        configMap:
-          name: cat-mysql-script
+        - name: cat-mysql-script
+          configMap:
+            name: {{ include "cat.mysql.name" . }}-script
+      terminationGracePeriodSeconds: {{ .Values.cat.mysql.terminationGracePeriodSeconds }}
       {{- with .Values.cat.mysql.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.cat.mysql.affinity }}
       affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                - {{ include "cat.mysql.name" . }}
-            topologyKey: kubernetes.io/hostname	
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.cat.mysql.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- with .Values.cat.mysql.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.cat.mysql.pvc.storage }}
+{{- end }}
