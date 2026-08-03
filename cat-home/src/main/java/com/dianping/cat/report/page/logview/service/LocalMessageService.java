@@ -89,7 +89,7 @@ public class LocalMessageService extends LocalModelService<String> implements Mo
 
 		try {
 			if (buf != null) {
-				tree = CodecHandler.decode(buf);
+				tree = CodecHandler.decode(messageFrame(buf));
 			}
 
 			if (tree == null) {
@@ -102,7 +102,7 @@ public class LocalMessageService extends LocalModelService<String> implements Mo
 					ByteBuf data = bucket.get(id);
 
 					if (data != null) {
-						tree = CodecHandler.decode(data);
+						tree = CodecHandler.decode(messageFrame(data));
 					}
 				}
 			}
@@ -128,6 +128,27 @@ public class LocalMessageService extends LocalModelService<String> implements Mo
 		}
 
 		return null;
+	}
+
+	static ByteBuf messageFrame(ByteBuf data) {
+		int readerIndex = data.readerIndex();
+		int readableBytes = data.readableBytes();
+
+		if (readableBytes < 4) {
+			throw new IllegalArgumentException("Invalid message buffer: missing frame length.");
+		}
+
+		int length = data.getInt(readerIndex);
+
+		if (length < 0 || length > readableBytes - 4) {
+			throw new IllegalArgumentException(String.format(
+							"Invalid message buffer: frame length %s exceeds readable bytes %s.", length, readableBytes));
+		}
+
+		ByteBuf frame = data.slice(readerIndex, length + 4);
+
+		frame.markReaderIndex();
+		return frame;
 	}
 
 	public String buildOldReport(ModelRequest request, ModelPeriod period, String domain, ApiPayload payload)
