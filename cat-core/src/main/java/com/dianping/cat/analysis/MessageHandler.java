@@ -21,5 +21,8 @@ package com.dianping.cat.analysis;
 import com.dianping.cat.message.spi.MessageTree;
 
 public interface MessageHandler {
-	public void handle(MessageTree message);
+	/**
+	 * @return true when ownership of the message buffer was transferred to the storage queue
+	 */
+	public boolean handle(MessageTree message);
 }

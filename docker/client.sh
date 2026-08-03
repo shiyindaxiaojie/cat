@@ -4,7 +4,6 @@ set -eo pipefail
 echo "Initializing client.xml"
 
 CLIENT_XML="${CAT_CLIENT_XML:-/data/appdatas/cat/client.xml}"
-CLIENT_TEMPLATE="${CAT_CLIENT_TEMPLATE:-/usr/local/share/cat/client.xml}"
 CAT_TCP_PORT="${CAT_TCP_PORT:-2280}"
 CAT_HTTP_PORT="${CAT_HTTP_PORT:-8080}"
 
@@ -17,13 +16,8 @@ for port_name in CAT_TCP_PORT CAT_HTTP_PORT; do
 done
 
 if [[ ! -f "${CLIENT_XML}" ]]; then
-    if [[ ! -f "${CLIENT_TEMPLATE}" ]]; then
-        echo "ERROR: CAT client configuration and template are both missing." >&2
-        exit 1
-    fi
-
-    mkdir -p -- "$(dirname "${CLIENT_XML}")"
-    cp -- "${CLIENT_TEMPLATE}" "${CLIENT_XML}"
+    echo "ERROR: CAT client configuration is missing: ${CLIENT_XML}" >&2
+    exit 1
 fi
 
 if [[ ! -w "${CLIENT_XML}" ]]; then

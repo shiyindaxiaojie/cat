@@ -52,6 +52,10 @@ import java.util.regex.Pattern;
 public class ServerConfigManager implements LogEnabled, Initializable {
 	static final int DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE = 10000;
 
+	static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
+
+	static final int MAX_ALLOWED_MESSAGE_SIZE = 64 * 1024 * 1024;
+
 	public static final String REALTIME_ANALYZER_QUEUE_SIZE = "realtime-analyzer-queue-size";
 
 	public static final String DUMP_DIR = "dump";
@@ -310,11 +314,37 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getMessageDumpThreads() {
-		return Integer.parseInt(getProperty("message-dumper-thread", "5"));
+		return getPositiveIntProperty("message-dumper-thread", 5);
 	}
 
 	public int getMessageProcessorThreads() {
-		return Integer.parseInt(getProperty("message-processor-thread", "20"));
+		return getPositiveIntProperty("message-processor-thread", 8);
+	}
+
+	public int getMessageProcessorQueueSize() {
+		return getPositiveIntProperty("message-processor-queue-size", 5000);
+	}
+
+	public int getNettyBossThreads() {
+		return getPositiveIntProperty("netty-boss-threads", 1);
+	}
+
+	public int getNettyWorkerThreads() {
+		return getPositiveIntProperty("netty-worker-threads", 4);
+	}
+
+	public int getMaxMessageSize() {
+		int value = getPositiveIntProperty("max-message-size", DEFAULT_MAX_MESSAGE_SIZE);
+
+		if (value <= MAX_ALLOWED_MESSAGE_SIZE) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("max-message-size(%s) exceeds the safety limit(%s), using %s.", value,
+						MAX_ALLOWED_MESSAGE_SIZE, DEFAULT_MAX_MESSAGE_SIZE));
+		}
+		return DEFAULT_MAX_MESSAGE_SIZE;
 	}
 
 	public int getQueueSizeOfRealtimeAnalyzer(String name) {
@@ -345,12 +375,27 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		}
 	}
 
+	private int getPositiveIntProperty(String name, int defaultValue) {
+		String configuredValue = getProperty(name, String.valueOf(defaultValue));
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid positive integer property %s(%s), using %s.", name, configuredValue,
+						defaultValue));
+		}
+		return defaultValue;
+	}
+
 	public ExecutorService getModelServiceExecutorService() {
 		return m_threadPool;
 	}
 
 	public int getModelServiceThreads() {
-		return Integer.parseInt(getProperty("model-service-thread", "100"));
+		return getPositiveIntProperty("model-service-thread", 32);
 	}
 
 	public String getProperty(String name, String defaultValue) {
@@ -401,7 +446,7 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getThreadsOfRealtimeAnalyzer(String name) {
-		return Integer.parseInt(getProperty(name + "-analyzer-threads", "2"));
+		return getPositiveIntProperty(name + "-analyzer-threads", 2);
 	}
 
 	@Override

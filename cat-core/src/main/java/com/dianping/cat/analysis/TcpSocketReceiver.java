@@ -21,7 +21,6 @@ package com.dianping.cat.analysis;
 import com.dianping.cat.CatConstants;
 import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.message.CodecHandler;
-import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.io.ClientMessageEncoder;
 import com.dianping.cat.message.spi.internal.DefaultMessageTree;
 import com.dianping.cat.statistic.ServerStatisticManager;
@@ -35,6 +34,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.util.ReferenceCountUtil;
 import org.codehaus.plexus.logging.LogEnabled;
 import org.codehaus.plexus.logging.Logger;
 import org.unidal.lookup.annotation.Inject;
@@ -62,14 +62,22 @@ public final class TcpSocketReceiver implements LogEnabled {
 
 	private Logger m_logger;
 
+	private int m_maxMessageSize;
+
 	private final int m_port = 2280; // default port number from phone, C:2, A:2, T:8
 
 	public synchronized void destory() {
 		try {
 			m_logger.info("start shutdown socket, port " + m_port);
-			m_future.channel().closeFuture();
-			m_bossGroup.shutdownGracefully();
-			m_workerGroup.shutdownGracefully();
+			if (m_future != null) {
+				m_future.channel().close().syncUninterruptibly();
+			}
+			if (m_bossGroup != null) {
+				m_bossGroup.shutdownGracefully();
+			}
+			if (m_workerGroup != null) {
+				m_workerGroup.shutdownGracefully();
+			}
 			m_logger.info("shutdown socket success");
 		} catch (Exception e) {
 			m_logger.warn(e.getMessage(), e);
@@ -100,11 +108,13 @@ public final class TcpSocketReceiver implements LogEnabled {
 
 	public synchronized void startServer(int port) throws InterruptedException {
 		boolean linux = getOSMatches("Linux") || getOSMatches("LINUX");
-		int threads = 24;
+		int bossThreads = m_serverConfigManager.getNettyBossThreads();
+		int workerThreads = m_serverConfigManager.getNettyWorkerThreads();
+		m_maxMessageSize = m_serverConfigManager.getMaxMessageSize();
 		ServerBootstrap bootstrap = new ServerBootstrap();
 
-		m_bossGroup = linux ? new EpollEventLoopGroup(threads) : new NioEventLoopGroup(threads);
-		m_workerGroup = linux ? new EpollEventLoopGroup(threads) : new NioEventLoopGroup(threads);
+		m_bossGroup = linux ? new EpollEventLoopGroup(bossThreads) : new NioEventLoopGroup(bossThreads);
+		m_workerGroup = linux ? new EpollEventLoopGroup(workerThreads) : new NioEventLoopGroup(workerThreads);
 		bootstrap.group(m_bossGroup, m_workerGroup);
 		bootstrap.channel(linux ? EpollServerSocketChannel.class : NioServerSocketChannel.class);
 
@@ -113,7 +123,7 @@ public final class TcpSocketReceiver implements LogEnabled {
 			protected void initChannel(SocketChannel ch) throws Exception {
 				ChannelPipeline pipeline = ch.pipeline();
 
-				pipeline.addLast("decode", new MessageDecoder());
+				pipeline.addLast("decode", new MessageDecoder(m_maxMessageSize));
 				pipeline.addLast("encode", new ClientMessageEncoder());
 			}
 		});
@@ -125,39 +135,59 @@ public final class TcpSocketReceiver implements LogEnabled {
 
 		try {
 			m_future = bootstrap.bind(port).sync();
-			m_logger.info("start netty server!");
+			m_logger.info(String.format("start netty server, bossThreads=%s, workerThreads=%s, maxMessageSize=%s!",
+						bossThreads, workerThreads, m_maxMessageSize));
 		} catch (Exception e) {
 			m_logger.error("Started Netty Server Failed:" + port, e);
 		}
 	}
 
 	public class MessageDecoder extends ByteToMessageDecoder {
+		private final int m_maxFrameSize;
+
 		private long m_processCount;
+
+		public MessageDecoder(int maxMessageSize) {
+			m_maxFrameSize = maxMessageSize;
+		}
 
 		@Override
 		protected void decode(ChannelHandlerContext ctx, ByteBuf buffer, List<Object> out) throws Exception {
 			if (buffer.readableBytes() < 4) {
 				return;
 			}
-			buffer.markReaderIndex();
-			int length = buffer.readInt();
-			buffer.resetReaderIndex();
+			int length = buffer.getInt(buffer.readerIndex());
+
+			if (length <= 0 || length > m_maxFrameSize) {
+				if (m_serverStateManager != null) {
+					m_serverStateManager.addMessageTotalLoss(1);
+				}
+				if (m_logger != null) {
+					m_logger.warn(String.format("Closing connection with invalid CAT message length %s (allowed: 1-%s).",
+							length, m_maxFrameSize));
+				}
+				ctx.close();
+				return;
+			}
+
 			if (buffer.readableBytes() < length + 4) {
 				return;
 			}
+
+			ByteBuf frame = null;
+			boolean bufferTransferred = false;
+
 			try {
-				if (length > 0) {
-					ByteBuf readBytes = buffer.readBytes(length + 4);
+				frame = buffer.readRetainedSlice(length + 4);
+				frame.markReaderIndex();
 
-					readBytes.markReaderIndex();
-					//readBytes.readInt();
+				DefaultMessageTree tree = (DefaultMessageTree) CodecHandler.decode(frame);
 
-					DefaultMessageTree tree = (DefaultMessageTree) CodecHandler.decode(readBytes);
+				frame.resetReaderIndex();
+				tree.setBuffer(frame);
+				bufferTransferred = m_handler.handle(tree);
 
-					// readBytes.retain();
-					readBytes.resetReaderIndex();
-					tree.setBuffer(readBytes);
-					m_handler.handle(tree);
+				if (bufferTransferred) {
 					m_processCount++;
 
 					long flag = m_processCount % CatConstants.SUCCESS_COUNT;
@@ -165,14 +195,18 @@ public final class TcpSocketReceiver implements LogEnabled {
 					if (flag == 0) {
 						m_serverStateManager.addMessageTotal(CatConstants.SUCCESS_COUNT);
 					}
-				} else {
-					// client message is error
-					buffer.readBytes(length);
-					BufReleaseHelper.release(buffer);
 				}
 			} catch (Exception e) {
-				m_serverStateManager.addMessageTotalLoss(1);
-				m_logger.error(e.getMessage(), e);
+				if (m_serverStateManager != null) {
+					m_serverStateManager.addMessageTotalLoss(1);
+				}
+				if (m_logger != null) {
+					m_logger.error(e.getMessage(), e);
+				}
+			} finally {
+				if (!bufferTransferred) {
+					ReferenceCountUtil.safeRelease(frame);
+				}
 			}
 		}
 	}

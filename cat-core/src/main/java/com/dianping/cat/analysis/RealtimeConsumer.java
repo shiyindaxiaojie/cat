@@ -31,7 +31,6 @@ import org.unidal.lookup.annotation.Named;
 
 import com.dianping.cat.Cat;
 import com.dianping.cat.config.server.ServerConfigManager;
-import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.Message;
 import com.dianping.cat.message.MessageProducer;
 import com.dianping.cat.message.Transaction;
@@ -59,17 +58,15 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 	private Logger m_logger;
 
 	@Override
-	public void consume(MessageTree tree) {
+	public boolean consume(MessageTree tree) {
 		long timestamp = tree.getMessage().getTimestamp();
 		Period period = m_periodManager.findPeriod(timestamp);
 
 		if (period != null) {
-			if (!period.distribute(tree)) {
-				BufReleaseHelper.release(tree.getBuffer());
-			}
+			return period.distribute(tree);
 		} else {
 			m_serverStateManager.addNetworkTimeError(1);
-			BufReleaseHelper.release(tree.getBuffer());
+			return false;
 		}
 	}
 

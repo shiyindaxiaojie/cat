@@ -1,7 +1,6 @@
 FROM tomcat:8.5.100-jdk8
 
 LABEL maintainer="梦想歌 <shiyindaxiaojie@gmail.com>"
-LABEL version="3.4.2"
 
 ENV HOME "/data"
 ENV TZ "Asia/Shanghai"
@@ -27,19 +26,17 @@ ENV RESOLVE_SERVER_URL "N"
 
 COPY cat-home/target/cat-home.war /usr/local/tomcat/webapps/cat.war
 COPY docker/tomcat-server.xml /usr/local/tomcat/conf/server.xml
-COPY docker/datasources.xml /usr/local/share/cat/datasources.xml
 COPY docker/datasources.xml /data/appdatas/cat/datasources.xml
-COPY docker/datasources.sh /usr/local/tomcat/datasources.sh
-COPY docker/client.xml /usr/local/share/cat/client.xml
+COPY docker/datasources.sh /data/appdatas/cat/datasources.sh
 COPY docker/client.xml /data/appdatas/cat/client.xml
-COPY docker/client.sh /usr/local/tomcat/client.sh
-COPY docker/env.sh /usr/local/tomcat/env.sh
-COPY docker/entrypoint.sh /usr/local/bin/cat-entrypoint.sh
+COPY docker/client.sh /data/appdatas/cat/client.sh
+COPY docker/env.sh /data/appdatas/cat/env.sh
+COPY docker/entrypoint.sh /data/appdatas/cat/entrypoint.sh
 
-RUN chmod +x /usr/local/tomcat/datasources.sh \
-    && chmod +x /usr/local/tomcat/client.sh \
-    && chmod +x /usr/local/tomcat/env.sh \
-    && chmod +x /usr/local/bin/cat-entrypoint.sh
+RUN chmod +x /data/appdatas/cat/datasources.sh \
+    && chmod +x /data/appdatas/cat/client.sh \
+    && chmod +x /data/appdatas/cat/env.sh \
+    && chmod +x /data/appdatas/cat/entrypoint.sh
 
-ENTRYPOINT ["/usr/local/bin/cat-entrypoint.sh"]
+ENTRYPOINT ["/data/appdatas/cat/entrypoint.sh"]
 CMD ["catalina.sh", "run"]

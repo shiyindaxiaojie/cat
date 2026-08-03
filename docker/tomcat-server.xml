@@ -12,8 +12,8 @@
 		<Executor name="tomcatThreadPool"
 				  className="org.apache.catalina.core.StandardThreadExecutor"
 				  namePrefix="catalina-exec-"
-				  maxThreads="500"
-				  minSpareThreads="25"
+				  maxThreads="200"
+				  minSpareThreads="20"
 				  maxIdleTime="60000"/>
 
 		<Connector executor="tomcatThreadPool"

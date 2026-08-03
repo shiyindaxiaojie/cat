@@ -77,7 +77,7 @@ public class Period {
 
 			for (MessageAnalyzer analyzer : messageAnalyzers) {
 				MessageQueue queue = new DefaultMessageQueue(queueSize);
-				PeriodTask task = new PeriodTask(analyzer, queue, startTime);
+				PeriodTask task = new PeriodTask(analyzer, queue, startTime, queueSize);
 
 				task.enableLogging(m_logger);
 
@@ -93,45 +93,52 @@ public class Period {
 	}
 
 	public boolean distribute(MessageTree tree) {
-		m_serverStateManager.addMessageTotal(tree.getDomain(), 1);
 		boolean bufferTransferred = false;
 		boolean success = true;
 		String domain = tree.getDomain();
 
+		try {
+			m_serverStateManager.addMessageTotal(domain, 1);
+		} catch (Throwable e) {
+			Cat.logError(e);
+		}
+
 		for (Entry<String, List<PeriodTask>> entry : m_tasks.entrySet()) {
-			List<PeriodTask> tasks = entry.getValue();
-			int length = tasks.size();
-			int index = 0;
-			boolean manyTasks = length > 1;
+			try {
+				List<PeriodTask> tasks = entry.getValue();
+				int length = tasks.size();
+				int index = 0;
+				boolean manyTasks = length > 1;
 
-			if (manyTasks) {
-				index = Math.abs(domain.hashCode()) % length;
-			}
-			PeriodTask task = tasks.get(index);
-			boolean enqueue = task.enqueue(tree);
-
-			if (!enqueue) {
 				if (manyTasks) {
+					index = Math.floorMod(domain == null ? 0 : domain.hashCode(), length);
+				}
+				PeriodTask task = tasks.get(index);
+				boolean enqueue = task.enqueue(tree);
+
+				if (!enqueue && manyTasks) {
 					task = tasks.get((index + 1) % length);
 					enqueue = task.enqueue(tree);
-
-					if (!enqueue) {
-						success = false;
-					}
-				} else {
-					success = false;
 				}
-			}
 
-			if ("dump".equals(entry.getKey()) && enqueue) {
-				bufferTransferred = true;
+				if (!enqueue) {
+					success = false;
+				} else if ("dump".equals(entry.getKey())) {
+					bufferTransferred = true;
+				}
+			} catch (Throwable e) {
+				success = false;
+				Cat.logError(e);
 			}
 		}
 
 		if ((!success) && (!tree.isProcessLoss())) {
-			m_serverStateManager.addMessageTotalLoss(tree.getDomain(), 1);
-
-			tree.setProcessLoss(true);
+			try {
+				m_serverStateManager.addMessageTotalLoss(domain, 1);
+				tree.setProcessLoss(true);
+			} catch (Throwable e) {
+				Cat.logError(e);
+			}
 		}
 
 		return bufferTransferred;

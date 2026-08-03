@@ -57,6 +57,17 @@ public class PeriodConfigTest {
 		Assert.assertTrue(overflow.isProcessLoss());
 	}
 
+	@Test
+	public void testBufferOwnershipTransfersOnlyWhenDumpQueueAcceptsMessage() {
+		MockServerConfigManager configManager = new MockServerConfigManager();
+		MockAnalyzerManager analyzerManager = new MockAnalyzerManager("dump", new MockAnalyzer());
+		configManager.setProperty("dump-analyzer-queue-size", "1");
+		Period period = newPeriod(analyzerManager, configManager);
+
+		Assert.assertTrue(period.distribute(newTree("cat")));
+		Assert.assertFalse(period.distribute(newTree("cat")));
+	}
+
 	private MessageTree newTree(String domain) {
 		DefaultMessageTree tree = new DefaultMessageTree();
 

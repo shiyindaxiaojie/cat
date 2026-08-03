@@ -50,6 +50,30 @@ public class ServerConfigManagerTest {
 		Assert.assertEquals(8000, manager.getQueueSizeOfRealtimeAnalyzer("business"));
 	}
 
+	@Test
+	public void testResourceSafetySettings() {
+		MockServerConfigManager manager = new MockServerConfigManager();
+
+		Assert.assertEquals(1, manager.getNettyBossThreads());
+		Assert.assertEquals(4, manager.getNettyWorkerThreads());
+		Assert.assertEquals(4 * 1024 * 1024, manager.getMaxMessageSize());
+		Assert.assertEquals(8, manager.getMessageProcessorThreads());
+		Assert.assertEquals(5000, manager.getMessageProcessorQueueSize());
+		Assert.assertEquals(32, manager.getModelServiceThreads());
+
+		manager.setProperty("netty-worker-threads", "2");
+		manager.setProperty("max-message-size", "1048576");
+		manager.setProperty("message-processor-queue-size", "2500");
+		Assert.assertEquals(2, manager.getNettyWorkerThreads());
+		Assert.assertEquals(1024 * 1024, manager.getMaxMessageSize());
+		Assert.assertEquals(2500, manager.getMessageProcessorQueueSize());
+
+		manager.setProperty("netty-worker-threads", "invalid");
+		manager.setProperty("max-message-size", String.valueOf(65 * 1024 * 1024));
+		Assert.assertEquals(4, manager.getNettyWorkerThreads());
+		Assert.assertEquals(4 * 1024 * 1024, manager.getMaxMessageSize());
+	}
+
 	private static class MockServerConfigManager extends ServerConfigManager {
 		private Map<String, String> m_properties = new HashMap<String, String>();
 

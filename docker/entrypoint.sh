@@ -5,10 +5,10 @@ set -eo pipefail
 # such as `docker run IMAGE bash` usable without requiring deployment variables.
 if [[ "${1##*/}" == "catalina.sh" ]]; then
     # env.sh must be sourced so the generated JAVA_OPTS remains available to Tomcat.
-    source "${CATALINA_HOME}/env.sh"
+    source "/data/appdatas/cat/env.sh"
 
-    "${CATALINA_HOME}/datasources.sh"
-    "${CATALINA_HOME}/client.sh"
+    "/data/appdatas/cat/datasources.sh"
+    "/data/appdatas/cat/client.sh"
 fi
 
 exec "$@"

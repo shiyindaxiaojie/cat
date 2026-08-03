@@ -2,7 +2,6 @@
 set -eo pipefail
 
 TARGET_XML="${CAT_DATASOURCES_XML:-/data/appdatas/cat/datasources.xml}"
-TEMPLATE_XML="${CAT_DATASOURCES_TEMPLATE:-/usr/local/share/cat/datasources.xml}"
 
 fail() {
     echo "ERROR: $*" >&2
@@ -34,7 +33,7 @@ render_line() {
     local text=$1
     local result=""
 
-    # Scan only the original template text. Values are appended directly and are
+    # Scan only the original XML text. Values are appended directly and are
     # never scanned again, so a password such as "MYSQL_PASSWORD&/" stays intact.
     while [[ -n "${text}" ]]; do
         case "${text}" in
@@ -74,7 +73,7 @@ MYSQL_USERNAME=${MYSQL_USERNAME:-}
 MYSQL_PASSWORD=${MYSQL_PASSWORD:-}
 MYSQL_SCHEMA=${MYSQL_SCHEMA:-cat}
 
-[[ -f "${TEMPLATE_XML}" ]] || fail "CAT datasource template not found: ${TEMPLATE_XML}"
+[[ -f "${TARGET_XML}" ]] || fail "CAT datasource configuration not found: ${TARGET_XML}"
 [[ -n "${MYSQL_URL}" ]] || fail "MYSQL_URL is required."
 [[ -n "${MYSQL_USERNAME}" ]] || fail "MYSQL_USERNAME is required."
 if [[ ! "${MYSQL_URL}" =~ ^[A-Za-z0-9_]([A-Za-z0-9._-]*[A-Za-z0-9_])?$ ]] \
@@ -99,7 +98,7 @@ trap 'rm -f "${TEMP_XML}"' EXIT
 while IFS= read -r line || [[ -n "${line}" ]]; do
     render_line "${line}"
     printf '\n'
-done < "${TEMPLATE_XML}" > "${TEMP_XML}"
+done < "${TARGET_XML}" > "${TEMP_XML}"
 
 if [[ -f "${TARGET_XML}" ]]; then
     chmod --reference="${TARGET_XML}" "${TEMP_XML}"

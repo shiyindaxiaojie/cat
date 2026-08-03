@@ -39,15 +39,21 @@ public class DefaultMessageHandler extends ContainerHolder implements MessageHan
 	}
 
 	@Override
-	public void handle(MessageTree tree) {
+	public boolean handle(MessageTree tree) {
 		if (m_consumer == null) {
-			m_consumer = lookup(MessageConsumer.class);
+			try {
+				m_consumer = lookup(MessageConsumer.class);
+			} catch (Throwable e) {
+				m_logger.error("Error when looking up message consumer! tree: " + tree, e);
+				return false;
+			}
 		}
 
 		try {
-			m_consumer.consume(tree);
+			return m_consumer.consume(tree);
 		} catch (Throwable e) {
 			m_logger.error("Error when consuming message in " + m_consumer + "! tree: " + tree, e);
+			return false;
 		}
 	}
 }

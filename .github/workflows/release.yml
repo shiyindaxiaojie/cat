@@ -2,6 +2,9 @@ name: Release Build
 
 on:
   push:
+    branches:
+      - release
+      - 'release/**'
     tags:
       - 'v*'
   release:
@@ -41,11 +44,23 @@ jobs:
         id: docker-version
         shell: bash
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            echo "version=latest" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-          fi
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            release:*)
+              version="latest"
+              ;;
+            push:refs/heads/release|push:refs/heads/release/*)
+              version="latest"
+              ;;
+            push:refs/tags/v*)
+              version="$GITHUB_REF_NAME"
+              ;;
+            *)
+              echo "Unsupported release trigger: $GITHUB_EVENT_NAME ($GITHUB_REF)" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3

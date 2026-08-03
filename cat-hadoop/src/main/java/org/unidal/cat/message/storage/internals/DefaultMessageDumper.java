@@ -74,6 +74,10 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 
 	private int m_processThreads;
 
+	private int m_queueSize;
+
+	private long[] m_lastQueuePressureLogs;
+
 	@Override
 	public void awaitTermination(int hour) throws InterruptedException {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd HH:mm:ss");
@@ -122,15 +126,17 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 	}
 
 	private int getIndex(String key) {
-		return (Math.abs(key.hashCode())) % (m_processThreads);
+		return Math.floorMod(key == null ? 0 : key.hashCode(), m_processThreads);
 	}
 
 	public void initialize(int hour) {
 		int processThreads = m_configManager.getMessageProcessorThreads();
 		m_processThreads = processThreads;
+		m_queueSize = m_configManager.getMessageProcessorQueueSize();
+		m_lastQueuePressureLogs = new long[processThreads];
 
 		for (int i = 0; i < processThreads; i++) {
-			BlockingQueue<MessageTree> queue = new ArrayBlockingQueue<MessageTree>(10000);
+			BlockingQueue<MessageTree> queue = new ArrayBlockingQueue<MessageTree>(m_queueSize);
 			MessageProcessor processor = lookup(MessageProcessor.class);
 
 			m_queues.add(queue);
@@ -153,20 +159,43 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 		boolean success = queue.offer(tree);
 
 		if (!success) {
-			m_statisticManager.addMessageDumpLoss(1);
 			BufReleaseHelper.release(tree.getBuffer());
 
-			if ((m_failCount.incrementAndGet() % 100) == 0) {
-				Cat.logError(new MessageQueueFullException("Error when adding message to queue, fails: " + m_failCount));
+			try {
+				m_statisticManager.addMessageDumpLoss(1);
 
-				m_logger.info("message tree queue is full " + m_failCount + " index " + index);
+				if ((m_failCount.incrementAndGet() % 100) == 0) {
+					Cat.logError(new MessageQueueFullException("Error when adding message to queue, fails: " + m_failCount));
+
+					m_logger.warn(String.format("message storage queue rejected=%s index=%s depth=%s capacity=%s",
+							m_failCount, index, queue.size(), m_queueSize));
+				}
+			} catch (Throwable e) {
+				Cat.logError(e);
 			}
 		} else {
-			m_statisticManager.addMessageSize(domain, tree.getBuffer().readableBytes());
+			try {
+				m_statisticManager.addMessageSize(domain, tree.getBuffer().readableBytes());
 
-			if ((++m_total) % CatConstants.SUCCESS_COUNT == 0) {
-				m_statisticManager.addMessageDump(CatConstants.SUCCESS_COUNT);
+				if ((++m_total) % CatConstants.SUCCESS_COUNT == 0) {
+					m_statisticManager.addMessageDump(CatConstants.SUCCESS_COUNT);
+					logQueuePressure(index, queue);
+				}
+			} catch (Throwable e) {
+				// The queue owns the buffer after offer succeeds. Never propagate and let the caller release it again.
+				Cat.logError(e);
 			}
+		}
+	}
+
+	private void logQueuePressure(int index, BlockingQueue<MessageTree> queue) {
+		int depth = queue.size();
+		long now = System.currentTimeMillis();
+
+		if ((long) depth * 4 >= (long) m_queueSize * 3 && now - m_lastQueuePressureLogs[index] >= 60 * 1000L) {
+			m_lastQueuePressureLogs[index] = now;
+			m_logger.warn(String.format("message storage queue pressure index=%s depth=%s capacity=%s rejected=%s", index,
+						depth, m_queueSize, m_failCount.get()));
 		}
 	}
 }

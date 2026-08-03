@@ -41,14 +41,25 @@ public class PeriodTask implements Task, LogEnabled {
 
 	private int m_queueOverflow;
 
+	private long m_enqueueCount;
+
+	private int m_queueCapacity;
+
+	private long m_lastQueuePressureLog;
+
 	private Logger m_logger;
 
 	private int m_index;
 
 	public PeriodTask(MessageAnalyzer analyzer, MessageQueue queue, long startTime) {
+		this(analyzer, queue, startTime, Integer.MAX_VALUE);
+	}
+
+	public PeriodTask(MessageAnalyzer analyzer, MessageQueue queue, long startTime, int queueCapacity) {
 		m_analyzer = analyzer;
 		m_queue = queue;
 		m_startTime = startTime;
+		m_queueCapacity = queueCapacity;
 	}
 
 	public void setIndex(int index) {
@@ -63,21 +74,35 @@ public class PeriodTask implements Task, LogEnabled {
 	public boolean enqueue(MessageTree tree) {
 		if (m_analyzer.isEligable(tree)) {
 			boolean result = m_queue.offer(tree);
+			m_enqueueCount++;
 
 			if (!result) { // trace queue overflow
 				m_queueOverflow++;
 
-				if (m_queueOverflow % (10 * CatConstants.ERROR_COUNT) == 0) {
+				if (m_logger != null && (m_queueOverflow == 1 || m_queueOverflow % CatConstants.ERROR_COUNT == 0)) {
 					String date = new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(m_analyzer.getStartTime()));
 
-					m_logger
-											.warn(m_analyzer.getClass().getSimpleName() + " queue overflow number " + m_queueOverflow	+ " analyzer time:"
-																	+ date);
+					m_logger.warn(String.format("%s queue rejected=%s depth=%s capacity=%s analyzerTime=%s",
+							m_analyzer.getClass().getSimpleName(), m_queueOverflow, m_queue.size(), m_queueCapacity, date));
 				}
+			} else if (m_enqueueCount % CatConstants.SUCCESS_COUNT == 0) {
+				logQueuePressure();
 			}
 			return result;
 		} else {
 			return true;
+		}
+	}
+
+	private void logQueuePressure() {
+		int depth = m_queue.size();
+		long now = System.currentTimeMillis();
+
+		if (m_logger != null && ((long) depth * 4 >= (long) m_queueCapacity * 3)
+						&& now - m_lastQueuePressureLog >= 60 * 1000L) {
+			m_lastQueuePressureLog = now;
+			m_logger.warn(String.format("%s queue pressure depth=%s capacity=%s rejected=%s",
+						m_analyzer.getClass().getSimpleName(), depth, m_queueCapacity, m_queueOverflow));
 		}
 	}
 
