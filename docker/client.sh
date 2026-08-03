@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-echo "Initializing client.xml"
-
 CLIENT_XML="${CAT_CLIENT_XML:-/data/appdatas/cat/client.xml}"
 CAT_TCP_PORT="${CAT_TCP_PORT:-2280}"
 CAT_HTTP_PORT="${CAT_HTTP_PORT:-8080}"
+
+echo "Initializing ${CLIENT_XML}"
 
 for port_name in CAT_TCP_PORT CAT_HTTP_PORT; do
     port_value=${!port_name}
@@ -166,4 +166,4 @@ chmod --reference="${CLIENT_XML}" "${TEMP_CLIENT_XML}"
 mv "${TEMP_CLIENT_XML}" "${CLIENT_XML}"
 trap - EXIT
 
-echo "client.xml initialization completed with endpoints: ${UNIQUE_ENDPOINTS[*]}"
+echo "Initialize client.xml completed with endpoints: ${UNIQUE_ENDPOINTS[*]}"

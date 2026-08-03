@@ -24,6 +24,7 @@ import org.unidal.lookup.ContainerHolder;
 import org.unidal.lookup.annotation.Inject;
 import org.unidal.lookup.annotation.Named;
 
+import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.spi.MessageTree;
 
 @Named(type = MessageHandler.class)
@@ -39,21 +40,21 @@ public class DefaultMessageHandler extends ContainerHolder implements MessageHan
 	}
 
 	@Override
-	public boolean handle(MessageTree tree) {
+	public void handle(MessageTree tree) {
 		if (m_consumer == null) {
 			try {
 				m_consumer = lookup(MessageConsumer.class);
 			} catch (Throwable e) {
 				m_logger.error("Error when looking up message consumer! tree: " + tree, e);
-				return false;
+				BufReleaseHelper.release(tree.getBuffer());
+				return;
 			}
 		}
 
 		try {
-			return m_consumer.consume(tree);
+			m_consumer.consume(tree);
 		} catch (Throwable e) {
 			m_logger.error("Error when consuming message in " + m_consumer + "! tree: " + tree, e);
-			return false;
 		}
 	}
 }

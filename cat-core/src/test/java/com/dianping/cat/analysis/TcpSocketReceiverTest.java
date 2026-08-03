@@ -31,9 +31,8 @@ public class TcpSocketReceiverTest {
 		final AtomicReference<ByteBuf> transferred = new AtomicReference<ByteBuf>();
 		TcpSocketReceiver receiver = receiverWithHandler(new MessageHandler() {
 			@Override
-			public boolean handle(MessageTree message) {
+			public void handle(MessageTree message) {
 				transferred.set(message.getBuffer());
-				return true;
 			}
 		});
 		EmbeddedChannel channel = new EmbeddedChannel(receiver.new MessageDecoder(1024));
@@ -50,11 +49,28 @@ public class TcpSocketReceiverTest {
 	}
 
 	@Test
-	public void testRejectedFrameIsReleasedByReceiver() throws Exception {
+	public void testDroppedFrameIsReleasedByHandler() throws Exception {
 		TcpSocketReceiver receiver = receiverWithHandler(new MessageHandler() {
 			@Override
-			public boolean handle(MessageTree message) {
-				return false;
+			public void handle(MessageTree message) {
+				BufReleaseHelper.release(message.getBuffer());
+			}
+		});
+		EmbeddedChannel channel = new EmbeddedChannel(receiver.new MessageDecoder(1024));
+		ByteBuf frame = newFrame();
+
+		channel.writeInbound(frame);
+
+		Assert.assertEquals(0, frame.refCnt());
+		channel.finishAndReleaseAll();
+	}
+
+	@Test
+	public void testHandlerFailureIsReleasedByReceiver() throws Exception {
+		TcpSocketReceiver receiver = receiverWithHandler(new MessageHandler() {
+			@Override
+			public void handle(MessageTree message) {
+				throw new IllegalStateException("handler failed");
 			}
 		});
 		EmbeddedChannel channel = new EmbeddedChannel(receiver.new MessageDecoder(1024));

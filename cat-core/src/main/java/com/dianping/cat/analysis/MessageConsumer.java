@@ -23,10 +23,7 @@ import java.util.List;
 import com.dianping.cat.message.spi.MessageTree;
 
 public interface MessageConsumer {
-	/**
-	 * @return true when ownership of the message buffer was transferred to the storage queue
-	 */
-	public boolean consume(MessageTree tree);
+	public void consume(MessageTree tree);
 
 	public void doCheckpoint();
 

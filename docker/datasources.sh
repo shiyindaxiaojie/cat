@@ -3,6 +3,8 @@ set -eo pipefail
 
 TARGET_XML="${CAT_DATASOURCES_XML:-/data/appdatas/cat/datasources.xml}"
 
+echo "Initializing ${TARGET_XML}"
+
 fail() {
     echo "ERROR: $*" >&2
     exit 1
@@ -109,4 +111,4 @@ fi
 mv "${TEMP_XML}" "${TARGET_XML}"
 trap - EXIT
 
-echo "datasources.xml initialization completed: ${TARGET_XML}"
+echo "Initialize datasources.xml completed: ${TARGET_XML}"

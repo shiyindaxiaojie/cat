@@ -185,16 +185,14 @@ public final class TcpSocketReceiver implements LogEnabled {
 
 				frame.resetReaderIndex();
 				tree.setBuffer(frame);
-				bufferTransferred = m_handler.handle(tree);
+				m_handler.handle(tree);
+				bufferTransferred = true;
+				m_processCount++;
 
-				if (bufferTransferred) {
-					m_processCount++;
+				long flag = m_processCount % CatConstants.SUCCESS_COUNT;
 
-					long flag = m_processCount % CatConstants.SUCCESS_COUNT;
-
-					if (flag == 0) {
-						m_serverStateManager.addMessageTotal(CatConstants.SUCCESS_COUNT);
-					}
+				if (flag == 0) {
+					m_serverStateManager.addMessageTotal(CatConstants.SUCCESS_COUNT);
 				}
 			} catch (Exception e) {
 				if (m_serverStateManager != null) {

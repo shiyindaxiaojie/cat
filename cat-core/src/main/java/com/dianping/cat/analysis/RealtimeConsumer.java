@@ -34,6 +34,7 @@ import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.message.Message;
 import com.dianping.cat.message.MessageProducer;
 import com.dianping.cat.message.Transaction;
+import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.spi.MessageTree;
 import com.dianping.cat.statistic.ServerStatisticManager;
 
@@ -58,15 +59,22 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 	private Logger m_logger;
 
 	@Override
-	public boolean consume(MessageTree tree) {
-		long timestamp = tree.getMessage().getTimestamp();
-		Period period = m_periodManager.findPeriod(timestamp);
+	public void consume(MessageTree tree) {
+		boolean bufferTransferred = false;
 
-		if (period != null) {
-			return period.distribute(tree);
-		} else {
-			m_serverStateManager.addNetworkTimeError(1);
-			return false;
+		try {
+			long timestamp = tree.getMessage().getTimestamp();
+			Period period = m_periodManager.findPeriod(timestamp);
+
+			if (period != null) {
+				bufferTransferred = period.distribute(tree);
+			} else {
+				m_serverStateManager.addNetworkTimeError(1);
+			}
+		} finally {
+			if (!bufferTransferred) {
+				BufReleaseHelper.release(tree.getBuffer());
+			}
 		}
 	}
 
