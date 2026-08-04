@@ -60,8 +60,11 @@
             <p>* hdfs : 定义HDFS配置信息，便于直接登录系统</p>
             <p>* server-uri : 定义HDFS服务地址</p>
             <p>* remote-servers : 定义HTTP服务列表，（远程监听端同步更新服务端信息即取此值）</p>
-            <p>* realtime-analyzer-queue-size : 定义每个实时分析线程的默认队列容量，默认为 10000；修改后在新的小时分析周期生效，无需重启</p>
-            <p>* {name}-analyzer-queue-size : 定义指定分析器每个线程的队列容量，优先于默认容量，例如 transaction-analyzer-queue-size</p>
+            <p>* netty-boss-threads : TCP 连接接收线程数，通常设置为 1；修改后需要重启</p>
+            <p>* netty-worker-threads : TCP 网络读写和解码线程数；按 Pod CPU limit 配置，1 核设 1，2 到 4 核通常设 2 到 4；修改后需要重启</p>
+            <p>* report-query-threads : 报表查询和模型合并的并发线程数，不参与消息接收或实时分析；修改后需要重启</p>
+            <p>* realtime-analyzer-queue-capacity-per-thread : 每个实时分析线程的默认队列容量，默认为 10000；下一个整点创建分析任务时生效，无需重启</p>
+            <p>* {name}-analyzer-queue-capacity-per-thread : 指定分析器每个线程的队列容量，优先于默认容量，例如 transaction-analyzer-queue-capacity-per-thread</p>
             <p>* {name}-analyzer-enable : 动态启用或停用指定分析器，默认为 true；修改后在新的小时分析周期生效</p>
             <p>* 可选分析器开关 : business、matrix、dependency、top、storage，分别对应 Business、性能报告、依赖分析、报错大盘和存储类报表</p>
             <p>* {name}-analyzer-threads : 定义指定分析器线程数，默认为 2；修改后在新的小时分析周期生效</p>

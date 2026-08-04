@@ -46,7 +46,7 @@ public class PeriodConfigTest {
 	public void testAnalyzerQueueSizeSettingAppliesToNewPeriod() {
 		MockServerConfigManager configManager = new MockServerConfigManager();
 		MockAnalyzerManager analyzerManager = new MockAnalyzerManager("transaction", new MockAnalyzer());
-		configManager.setProperty("transaction-analyzer-queue-size", "2");
+		configManager.setProperty("transaction-analyzer-queue-capacity-per-thread", "2");
 		Period period = newPeriod(analyzerManager, configManager);
 
 		period.distribute(newTree("cat"));
@@ -61,7 +61,7 @@ public class PeriodConfigTest {
 	public void testBufferOwnershipTransfersOnlyWhenDumpQueueAcceptsMessage() {
 		MockServerConfigManager configManager = new MockServerConfigManager();
 		MockAnalyzerManager analyzerManager = new MockAnalyzerManager("dump", new MockAnalyzer());
-		configManager.setProperty("dump-analyzer-queue-size", "1");
+		configManager.setProperty("dump-analyzer-queue-capacity-per-thread", "1");
 		Period period = newPeriod(analyzerManager, configManager);
 
 		Assert.assertTrue(period.distribute(newTree("cat")));

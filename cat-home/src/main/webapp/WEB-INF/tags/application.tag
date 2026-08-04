@@ -23,14 +23,10 @@
 			</script>
 			<ul class="nav nav-list" style="top: 0px;">
 				<li id="Dashboard_report" class="hsub">
-						<%--<a href="#" class="dropdown-toggle">
-							<i class="menu-icon fa fa-tachometer"></i>
-							<span class="menu-text">Dashboard</span>
-							<b class="arrow fa fa-angle-down"></b>
-						</a>--%>
-					<a href="/cat/r/top?op=view&domain=${model.domain}">
+					<a href="/cat/r/top?op=view&domain=${model.domain}" class="dropdown-toggle">
 						<i class="menu-icon fa fa-tachometer"></i>
 						<span class="menu-text">监控大盘</span>
+						<b class="arrow fa fa-angle-down"></b>
 					</a>
 					<b class="arrow"></b>
 					<ul class="submenu">
@@ -174,6 +170,7 @@
 					<a href="/cat/r/dependency?domain=${model.domain}&ip=${model.ipAddress}&date=${model.date}&reportType=view&op=view" class="dropdown-toggle">
 						<i class="menu-icon glyphicon glyphicon-road"></i>
 						<span class="menu-text">依赖分析</span>
+						<b class="arrow fa fa-angle-down"></b>
 					</a>
 					<b class="arrow"></b>
 					<ul class="submenu">

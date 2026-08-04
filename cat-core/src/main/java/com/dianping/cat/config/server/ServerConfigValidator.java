@@ -36,8 +36,8 @@ public class ServerConfigValidator extends DefaultValidator {
 	}
 
 	private void initializeAnalyzerProperties(Server server) {
-		addPropertyIfAbsent(server, ServerConfigManager.REALTIME_ANALYZER_QUEUE_SIZE,
-						String.valueOf(ServerConfigManager.DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE));
+		addPropertyIfAbsent(server, ServerConfigManager.REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD,
+						String.valueOf(ServerConfigManager.DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD));
 
 		for (String analyzer : OPTIONAL_ANALYZERS) {
 			addPropertyIfAbsent(server, analyzer + "-analyzer-enable", "true");

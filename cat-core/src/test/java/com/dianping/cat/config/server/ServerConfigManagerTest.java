@@ -21,19 +21,19 @@ public class ServerConfigManagerTest {
 	public void testRealtimeAnalyzerQueueSize() {
 		MockServerConfigManager manager = new MockServerConfigManager();
 
-		Assert.assertEquals(10000, manager.getQueueSizeOfRealtimeAnalyzer("transaction"));
+		Assert.assertEquals(10000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("transaction"));
 
-		manager.setProperty("realtime-analyzer-queue-size", "10000");
-		Assert.assertEquals(10000, manager.getQueueSizeOfRealtimeAnalyzer("transaction"));
+		manager.setProperty("realtime-analyzer-queue-capacity-per-thread", "10000");
+		Assert.assertEquals(10000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("transaction"));
 
-		manager.setProperty("transaction-analyzer-queue-size", "5000");
-		Assert.assertEquals(5000, manager.getQueueSizeOfRealtimeAnalyzer("transaction"));
+		manager.setProperty("transaction-analyzer-queue-capacity-per-thread", "5000");
+		Assert.assertEquals(5000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("transaction"));
 
-		manager.setProperty("transaction-analyzer-queue-size", "0");
-		Assert.assertEquals(10000, manager.getQueueSizeOfRealtimeAnalyzer("transaction"));
+		manager.setProperty("transaction-analyzer-queue-capacity-per-thread", "0");
+		Assert.assertEquals(10000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("transaction"));
 
-		manager.setProperty("transaction-analyzer-queue-size", "invalid");
-		Assert.assertEquals(10000, manager.getQueueSizeOfRealtimeAnalyzer("transaction"));
+		manager.setProperty("transaction-analyzer-queue-capacity-per-thread", "invalid");
+		Assert.assertEquals(10000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("transaction"));
 	}
 
 	@Test
@@ -45,9 +45,9 @@ public class ServerConfigManagerTest {
 		Assert.assertFalse(manager.getEnableOfRealtimeAnalyzer("business"));
 
 		manager.setProperty("business-analyzer-enable", "true");
-		manager.setProperty("business-analyzer-queue-size", "8000");
+		manager.setProperty("business-analyzer-queue-capacity-per-thread", "8000");
 		Assert.assertTrue(manager.getEnableOfRealtimeAnalyzer("business"));
-		Assert.assertEquals(8000, manager.getQueueSizeOfRealtimeAnalyzer("business"));
+		Assert.assertEquals(8000, manager.getQueueCapacityPerThreadOfRealtimeAnalyzer("business"));
 	}
 
 	@Test
@@ -55,11 +55,11 @@ public class ServerConfigManagerTest {
 		MockServerConfigManager manager = new MockServerConfigManager();
 
 		Assert.assertEquals(1, manager.getNettyBossThreads());
-		Assert.assertEquals(4, manager.getNettyWorkerThreads());
+		Assert.assertEquals(1, manager.getNettyWorkerThreads());
 		Assert.assertEquals(4 * 1024 * 1024, manager.getMaxMessageSize());
 		Assert.assertEquals(8, manager.getMessageProcessorThreads());
 		Assert.assertEquals(5000, manager.getMessageProcessorQueueSize());
-		Assert.assertEquals(32, manager.getModelServiceThreads());
+		Assert.assertEquals(32, manager.getReportQueryThreads());
 
 		manager.setProperty("netty-worker-threads", "2");
 		manager.setProperty("max-message-size", "1048576");
@@ -70,7 +70,7 @@ public class ServerConfigManagerTest {
 
 		manager.setProperty("netty-worker-threads", "invalid");
 		manager.setProperty("max-message-size", String.valueOf(65 * 1024 * 1024));
-		Assert.assertEquals(4, manager.getNettyWorkerThreads());
+		Assert.assertEquals(1, manager.getNettyWorkerThreads());
 		Assert.assertEquals(4 * 1024 * 1024, manager.getMaxMessageSize());
 	}
 

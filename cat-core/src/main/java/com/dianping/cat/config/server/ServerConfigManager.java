@@ -50,13 +50,16 @@ import java.util.regex.Pattern;
 
 @Named
 public class ServerConfigManager implements LogEnabled, Initializable {
-	static final int DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE = 10000;
+	static final int DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD = 10000;
 
 	static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
 
 	static final int MAX_ALLOWED_MESSAGE_SIZE = 64 * 1024 * 1024;
 
-	public static final String REALTIME_ANALYZER_QUEUE_SIZE = "realtime-analyzer-queue-size";
+	public static final String REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD =
+				"realtime-analyzer-queue-capacity-per-thread";
+
+	public static final String REPORT_QUERY_THREADS = "report-query-threads";
 
 	public static final String DUMP_DIR = "dump";
 
@@ -330,7 +333,7 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getNettyWorkerThreads() {
-		return getPositiveIntProperty("netty-worker-threads", 4);
+		return getPositiveIntProperty("netty-worker-threads", 1);
 	}
 
 	public int getMaxMessageSize() {
@@ -347,22 +350,23 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		return DEFAULT_MAX_MESSAGE_SIZE;
 	}
 
-	public int getQueueSizeOfRealtimeAnalyzer(String name) {
-		String defaultQueueSize = getProperty(REALTIME_ANALYZER_QUEUE_SIZE,
-							String.valueOf(DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE));
-		int fallbackQueueSize = parsePositiveInt(defaultQueueSize, DEFAULT_REALTIME_ANALYZER_QUEUE_SIZE);
-		String queueSize = getProperty(name + "-analyzer-queue-size", defaultQueueSize);
-		int value = parsePositiveInt(queueSize, -1);
+	public int getQueueCapacityPerThreadOfRealtimeAnalyzer(String name) {
+		String defaultQueueCapacity = getProperty(REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD,
+							String.valueOf(DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD));
+		int fallbackQueueCapacity = parsePositiveInt(defaultQueueCapacity,
+							DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD);
+		String queueCapacity = getProperty(name + "-analyzer-queue-capacity-per-thread", defaultQueueCapacity);
+		int value = parsePositiveInt(queueCapacity, -1);
 
 		if (value > 0) {
 			return value;
 		}
 
 		if (m_logger != null) {
-			m_logger.warn(String.format("Invalid realtime analyzer queue size(%s) for %s, using %s.", queueSize, name,
-								fallbackQueueSize));
+			m_logger.warn(String.format("Invalid realtime analyzer queue capacity per thread(%s) for %s, using %s.",
+						queueCapacity, name, fallbackQueueCapacity));
 		}
-		return fallbackQueueSize;
+		return fallbackQueueCapacity;
 	}
 
 	private int parsePositiveInt(String value, int defaultValue) {
@@ -390,12 +394,23 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		return defaultValue;
 	}
 
-	public ExecutorService getModelServiceExecutorService() {
+	public ExecutorService getReportQueryExecutorService() {
 		return m_threadPool;
 	}
 
-	public int getModelServiceThreads() {
-		return getPositiveIntProperty("model-service-thread", 32);
+	public int getReportQueryThreads() {
+		String configuredValue = getProperty(REPORT_QUERY_THREADS, "32");
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid positive integer property %s(%s), using 32.", REPORT_QUERY_THREADS,
+						configuredValue));
+		}
+		return 32;
 	}
 
 	public String getProperty(String name, String defaultValue) {
@@ -604,9 +619,9 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 			m_logger.info(m_server.toString());
 
 			if (isLocalMode()) {
-				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ModelService", 5);
+				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ReportQuery", 5);
 			} else {
-				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ModelService", getModelServiceThreads());
+				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ReportQuery", getReportQueryThreads());
 			}
 		}
 	}

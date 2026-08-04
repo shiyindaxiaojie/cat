@@ -73,7 +73,7 @@ public class Period {
 			}
 
 			List<MessageAnalyzer> messageAnalyzers = m_analyzerManager.getAnalyzer(name, startTime);
-			int queueSize = m_serverConfigManager.getQueueSizeOfRealtimeAnalyzer(name);
+			int queueSize = m_serverConfigManager.getQueueCapacityPerThreadOfRealtimeAnalyzer(name);
 
 			for (MessageAnalyzer analyzer : messageAnalyzers) {
 				MessageQueue queue = new DefaultMessageQueue(queueSize);

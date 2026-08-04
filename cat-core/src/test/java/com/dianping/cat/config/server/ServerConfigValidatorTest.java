@@ -28,7 +28,8 @@ public class ServerConfigValidatorTest {
 
 		Server server = config.findServer(ServerConfigManager.DEFAULT);
 
-		Assert.assertEquals("10000", server.findProperty("realtime-analyzer-queue-size").getValue());
+		Assert.assertEquals("10000",
+						server.findProperty("realtime-analyzer-queue-capacity-per-thread").getValue());
 		Assert.assertEquals("false", server.findProperty("business-analyzer-enable").getValue());
 		Assert.assertEquals("true", server.findProperty("matrix-analyzer-enable").getValue());
 		Assert.assertEquals("true", server.findProperty("dependency-analyzer-enable").getValue());
