@@ -42,7 +42,9 @@ import org.unidal.lookup.annotation.Named;
 import org.unidal.tuple.Pair;
 import org.xml.sax.SAXException;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -55,6 +57,8 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
 
 	static final int MAX_ALLOWED_MESSAGE_SIZE = 64 * 1024 * 1024;
+
+	static final int DEFAULT_NETTY_WORKER_AUTO_MAX = 4;
 
 	public static final String REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD =
 				"realtime-analyzer-queue-capacity-per-thread";
@@ -72,6 +76,8 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	public final static String SEND_MACHINE = "send-machine";
 
 	public final static String ALARM_MACHINE = "alarm-machine";
+
+	public final static String CONSUMER_MACHINE = "consumer-machine";
 
 	public final static String HDFS_ENABLED = "hdfs-enabled";
 
@@ -333,7 +339,160 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getNettyWorkerThreads() {
-		return getPositiveIntProperty("netty-worker-threads", 1);
+		String configuredValue = getProperty("netty-worker-threads", "auto");
+
+		if (configuredValue == null || configuredValue.trim().length() == 0
+				|| "auto".equalsIgnoreCase(configuredValue.trim())) {
+			return getAutoNettyWorkerThreads();
+		}
+
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid netty-worker-threads(%s), using auto value.", configuredValue));
+		}
+		return getAutoNettyWorkerThreads();
+	}
+
+	protected int getAutoNettyWorkerThreads() {
+		int runtimeProcessors = Math.max(1, getRuntimeAvailableProcessors());
+		int cgroupProcessors = getCgroupCpuLimit();
+		int detectedProcessors;
+
+		if (cgroupProcessors > 0) {
+			detectedProcessors = Math.min(runtimeProcessors, cgroupProcessors);
+		} else if (isKubernetesEnvironment()) {
+			detectedProcessors = 1;
+		} else {
+			detectedProcessors = runtimeProcessors;
+		}
+
+		return Math.max(1, Math.min(detectedProcessors, DEFAULT_NETTY_WORKER_AUTO_MAX));
+	}
+
+	protected int getRuntimeAvailableProcessors() {
+		return Runtime.getRuntime().availableProcessors();
+	}
+
+	protected boolean isKubernetesEnvironment() {
+		return System.getenv("KUBERNETES_SERVICE_HOST") != null;
+	}
+
+	protected int getCgroupCpuLimit() {
+		int quotaProcessors = readCpuQuota();
+		int cpusetProcessors = readCpuSet();
+
+		if (quotaProcessors > 0 && cpusetProcessors > 0) {
+			return Math.min(quotaProcessors, cpusetProcessors);
+		}
+		return Math.max(quotaProcessors, cpusetProcessors);
+	}
+
+	private int readCpuQuota() {
+		String cpuMax = readFirstLine("/sys/fs/cgroup/cpu.max");
+
+		if (cpuMax != null) {
+			String[] values = cpuMax.trim().split("\\s+");
+
+			if (values.length >= 2 && !"max".equals(values[0])) {
+				int processors = calculateQuotaProcessors(values[0], values[1]);
+
+				if (processors > 0) {
+					return processors;
+				}
+			}
+		}
+
+		String[][] cgroupV1Files = {
+				{ "/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu/cpu.cfs_period_us" },
+				{ "/sys/fs/cgroup/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu.cfs_period_us" } };
+
+		for (String[] files : cgroupV1Files) {
+			int processors = calculateQuotaProcessors(readFirstLine(files[0]), readFirstLine(files[1]));
+
+			if (processors > 0) {
+				return processors;
+			}
+		}
+		return -1;
+	}
+
+	private int readCpuSet() {
+		String[] files = { "/sys/fs/cgroup/cpuset.cpus.effective", "/sys/fs/cgroup/cpuset/cpuset.cpus",
+				"/sys/fs/cgroup/cpuset.cpus" };
+
+		for (String file : files) {
+			int processors = countCpuSet(readFirstLine(file));
+
+			if (processors > 0) {
+				return processors;
+			}
+		}
+		return -1;
+	}
+
+	private int calculateQuotaProcessors(String quotaValue, String periodValue) {
+		try {
+			long quota = Long.parseLong(quotaValue);
+			long period = Long.parseLong(periodValue);
+
+			if (quota > 0 && period > 0) {
+				long processors = quota / period + (quota % period == 0 ? 0 : 1);
+
+				return (int) Math.min(processors, Integer.MAX_VALUE);
+			}
+		} catch (Exception e) {
+			// Missing or malformed cgroup values are handled by the safe fallback.
+		}
+		return -1;
+	}
+
+	private int countCpuSet(String value) {
+		if (value == null || value.trim().length() == 0) {
+			return -1;
+		}
+
+		int count = 0;
+
+		try {
+			for (String item : value.trim().split(",")) {
+				int separator = item.indexOf('-');
+
+				if (separator < 0) {
+					Integer.parseInt(item);
+					count++;
+				} else {
+					int start = Integer.parseInt(item.substring(0, separator));
+					int end = Integer.parseInt(item.substring(separator + 1));
+
+					if (end < start) {
+						return -1;
+					}
+					count += end - start + 1;
+				}
+			}
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+		return count;
+	}
+
+	private String readFirstLine(String path) {
+		File file = new File(path);
+
+		if (!file.isFile()) {
+			return null;
+		}
+
+		try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+			return reader.readLine();
+		} catch (IOException e) {
+			return null;
+		}
 	}
 
 	public boolean isDailyCheckpointEnabled() {
@@ -603,6 +762,10 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		return Boolean.parseBoolean(getProperty(ALARM_MACHINE, "false"));
 	}
 
+	public boolean isConsumerMachine() {
+		return Boolean.parseBoolean(getProperty(CONSUMER_MACHINE, "true"));
+	}
+
 	public boolean isHarMode() {
 		if (m_server != null) {
 			return m_server.getStorage().isHarMode();
@@ -649,6 +812,7 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		}
 		m_logger.info("CAT server is running with hdfs," + isHdfsOn());
 		m_logger.info("CAT server is running with alert," + isAlertMachine());
+		m_logger.info("CAT server is running with consumer," + isConsumerMachine());
 		m_logger.info("CAT server is running with job," + isJobMachine());
 
 		if (m_server != null) {

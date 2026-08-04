@@ -117,6 +117,11 @@ public final class TcpSocketReceiver implements LogEnabled {
 	}
 
 	public void init() {
+		if (!m_serverConfigManager.isConsumerMachine()) {
+			m_logger.info("CAT message consumer is disabled; TCP port " + m_port + " will not be opened.");
+			return;
+		}
+
 		try {
 			startServer(m_port);
 		} catch (Exception e) {

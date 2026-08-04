@@ -10,15 +10,21 @@
 			<property name="send-machine" value="false"/>
 			<!-- 是否执行告警计算任务；集群中应避免所有节点重复计算告警。 -->
 			<property name="alarm-machine" value="false"/>
+			<!-- 是否接收并分析客户端消息；控制节点可设为 false，修改后需要重启。 -->
+			<property name="consumer-machine" value="true"/>
 			<!-- 是否启用 HDFS 存储，设置为 false 时使用本地目录。 -->
 			<property name="hdfs-enabled" value="false"/>
 			<!-- CAT 控制台节点列表，格式为 host:HTTP端口，多个节点用英文逗号分隔；用于跨节点查询和跳转。 -->
 			<property name="remote-servers" value="127.0.0.1:8080"/>
 
-			<!-- TCP 接收线程：修改后需要重启。boss 只负责接受连接，通常 1 个足够。 -->
+			<!-- TCP 连接接收线程数；只负责接受连接，控制节点和数据节点通常都保持 1。 -->
 			<property name="netty-boss-threads" value="1"/>
-			<!-- worker 负责网络读写和消息解码；修改后需要重启。 -->
-			<property name="netty-worker-threads" value="1"/>
+			<!--
+				TCP 网络读写和消息解码线程数；控制节点关闭 consumer-machine 后不会创建这些线程。
+				auto 优先按 cgroup CPU quota、cpuset 和 JVM CPU 数取最小值，自动值最多为 4；
+				Kubernetes 中无法读取 cgroup 时回退为 1，避免旧 JDK 错把宿主机 CPU 数当成 Pod CPU 数。
+			-->
+			<property name="netty-worker-threads" value="auto"/>
 
 			<!--
 				报表查询并发线程数。负责并行读取和合并 Transaction、Event 等报表模型，不参与消息接收或实时分析。
