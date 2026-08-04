@@ -83,9 +83,10 @@ public class LocalBucket implements Bucket {
 	}
 
 	@Override
-	public void flush() {
+	public synchronized void flush() {
 		try {
-			m_data.m_out.flush();
+			m_data.flush();
+			m_index.flush();
 		} catch (Exception e) {
 			Cat.logError(e);
 		}
@@ -154,6 +155,8 @@ public class LocalBucket implements Bucket {
 
 		private DataOutputStream m_out;
 
+		private FileOutputStream m_fileOut;
+
 		private void close() {
 			try {
 				if (m_out != null) {
@@ -176,6 +179,13 @@ public class LocalBucket implements Bucket {
 			return m_offset;
 		}
 
+		private void flush() throws IOException {
+			if (m_out != null) {
+				m_out.flush();
+				m_fileOut.getFD().sync();
+			}
+		}
+
 		private File getPath() {
 			return m_path;
 		}
@@ -186,7 +196,8 @@ public class LocalBucket implements Bucket {
 
 			m_file = new RandomAccessFile(m_path, "rw"); // read-write
 			m_offset = m_path.length();
-			m_out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(m_path, true), (int) SEGMENT_SIZE));
+			m_fileOut = new FileOutputStream(m_path, true);
+			m_out = new DataOutputStream(new BufferedOutputStream(m_fileOut, (int) SEGMENT_SIZE));
 
 			if (m_offset == 0) {
 				m_out.writeInt(-1);
@@ -271,6 +282,15 @@ public class LocalBucket implements Bucket {
 
 			m_file = null;
 			m_caches.clear();
+		}
+
+		private void flush() throws IOException {
+			m_header.m_segment.flush();
+
+			for (SegmentCache cache : m_caches.values()) {
+				cache.flush();
+			}
+			m_indexChannel.force(false);
 		}
 
 		private Segment getSegment(String ip, long id) throws IOException {
@@ -480,15 +500,23 @@ public class LocalBucket implements Bucket {
 
 			private synchronized void flushAndClose() throws IOException {
 				if (m_buf != null) {
-					int pos = m_buf.position();
-
-					m_buf.position(0);
-					m_segmentChannel.write(m_buf, m_address);
-					m_buf.position(pos);
+					flush();
 					m_bufCache.put(m_buf);
 					m_buf = null;
 				} else {
 					Cat.logEvent("CloseBucket", "Duplicate:" + m_path.getAbsolutePath());
+				}
+			}
+
+			private synchronized void flush() throws IOException {
+				if (m_buf != null) {
+					int pos = m_buf.position();
+
+					m_buf.position(0);
+					while (m_buf.hasRemaining()) {
+						m_segmentChannel.write(m_buf, m_address + m_buf.position());
+					}
+					m_buf.position(pos);
 				}
 			}
 
@@ -526,6 +554,12 @@ public class LocalBucket implements Bucket {
 					segment.flushAndClose();
 				}
 				m_latestSegments.clear();
+			}
+
+			private synchronized void flush() throws IOException {
+				for (Segment segment : m_latestSegments.values()) {
+					segment.flush();
+				}
 			}
 
 			private Segment findOrCreateNextSegment(long segmentId) throws IOException {

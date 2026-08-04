@@ -1,61 +1,54 @@
-version: '2.2'
+services:
+  cat:
+    image: cat:3.4.2-local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      MYSQL_URL: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-}"
+      MYSQL_SCHEMA: cat
+      # Docker DNS remains stable even if the CAT container IP changes.
+      SERVER_URL: cat
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "2280:2280"
+    restart: unless-stopped
+    networks:
+      - cat
+
+  mysql:
+    image: mysql:5.7.37
+    environment:
+      MYSQL_DATABASE: cat
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-}"
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../docs/scripts/cat-init-3.4.0.sql:/docker-entrypoint-initdb.d/cat-init.sql:ro
+    restart: unless-stopped
+    networks:
+      - cat
 
 networks:
   cat:
     driver: bridge
 
-services:
-  cat:
-    image: meituaninc/cat:3.0.1
-    container_name: cat
-
-    ######## build from Dockerfile ###########
-    # build:
-    #  context: ../
-    #  dockerfile: ./docker/Dockerfile
-    ######## End -> build from Dockerfile ###########
-
-    environment:
-      # if you have your own mysql, config it here, and disable the 'mysql' config blow
-      - MYSQL_URL=cat-mysql # links will maintain /etc/hosts, just use 'container_name'
-      - MYSQL_PORT=3306
-      - MYSQL_USERNAME=root
-      - MYSQL_PASSWD=
-      - MYSQL_SCHEMA=cat
-      # 必须设置成你的机器IP地址
-      # - SERVER_IP=YOUR IP
-    volumes:
-      # 默认127.0.0.1，可以修改为自己真实的服务器集群地址
-      - "./client.xml:/data/appdatas/cat/client.xml"
-      # 默认使用环境变量设置。可以启用本注解，并修改为自己的配置
-#      - "./datasources.xml:/data/appdatas/cat/datasources.xml"
-    command: /bin/sh -c './datasources.sh && catalina.sh run'
-    links:
-      - mysql
-    depends_on:
-      - mysql
-    ports:
-      - "8080:8080"
-      - "2280:2280"
-    networks: 
-      - cat
-
-  # disable this if you have your own mysql
-  mysql:
-    container_name: cat-mysql
-    image: mysql:5.7.37
-    # expose 3306 to client (navicat)
-    ports:
-       - 3306:3306
-    volumes:
-      # change './docker/mysql/volume' to your own path
-      # WARNING: without this line, your data will be lost.
-      - "./mysql/volume:/var/lib/mysql"
-      - "../script/:/docker-entrypoint-initdb.d/"
-    command: mysqld -uroot --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --init-connect='SET NAMES utf8mb4;' --innodb-flush-log-at-trx-commit=0
-    environment:
-      MYSQL_ALLOW_EMPTY_PASSWORD: "true"
-      MYSQL_DATABASE: "cat"
-      MYSQL_PASSWORD: ""
-    networks: 
-      - cat
+volumes:
+  mysql-data:

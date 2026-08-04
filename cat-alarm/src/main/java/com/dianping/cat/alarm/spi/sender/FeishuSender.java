@@ -20,7 +20,7 @@ import java.util.List;
  */
 public class FeishuSender extends AccessTokenSender {
 
-	public static final String ID = AlertChannel.DINGTALK.getName();
+	public static final String ID = AlertChannel.FEISHU.getName();
 
 	public static final String PAGE_LINK = "";
 

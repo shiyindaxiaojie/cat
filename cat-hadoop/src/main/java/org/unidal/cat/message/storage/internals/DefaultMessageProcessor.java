@@ -18,7 +18,6 @@
  */
 package org.unidal.cat.message.storage.internals;
 
-import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.BlockingQueue;
@@ -43,6 +42,7 @@ import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.message.Transaction;
 import com.dianping.cat.message.internal.MessageId;
 import com.dianping.cat.message.spi.MessageTree;
+import com.dianping.cat.statistic.ServerStatisticManager;
 
 @Named(type = MessageProcessor.class, instantiationStrategy = Named.PER_LOOKUP)
 public class DefaultMessageProcessor implements MessageProcessor, MessageFinder {
@@ -54,6 +54,9 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 
 	@Inject
 	private ServerConfigManager m_configManger;
+
+	@Inject
+	private ServerStatisticManager m_statisticManager;
 
 	private BlockDumper m_dumper;
 
@@ -109,7 +112,7 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		return m_queue.poll(5, TimeUnit.MILLISECONDS);
 	}
 
-	private void processMessage(MessageTree tree) {
+	private synchronized void processMessage(MessageTree tree) {
 		MessageId id = tree.getFormatMessageId();
 		String domain = id.getDomain();
 		int hour = id.getHour();
@@ -136,8 +139,33 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		} catch (Exception e) {
 			Cat.logError(e);
 		} finally {
-			ReferenceCountUtil.release(buffer);
+			try {
+				if (m_count % 1000 == 0 && tree.getMessage() != null) {
+					long delay = System.currentTimeMillis() - tree.getMessage().getTimestamp();
+
+					m_statisticManager.addProcessDelay(Math.max(0, delay));
+				}
+			} catch (Throwable e) {
+				Cat.logError(e);
+			} finally {
+				ReferenceCountUtil.safeRelease(buffer);
+			}
 		}
+	}
+
+	@Override
+	public synchronized void flush() {
+		for (Block block : m_blocks.values()) {
+			try {
+				if (!block.getOffsets().isEmpty()) {
+					block.finish();
+					m_dumper.dump(block);
+				}
+			} catch (Throwable e) {
+				Cat.logError(e);
+			}
+		}
+		m_blocks.clear();
 	}
 
 	@Override
@@ -145,44 +173,48 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		MessageTree tree;
 
 		try {
-			while (m_enabled.get() || !m_queue.isEmpty()) {
-				tree = pollMessage();
+			try {
+				while (m_enabled.get() || !m_queue.isEmpty()) {
+					tree = pollMessage();
 
-				if (tree != null) {
-					if (isMonitor()) {
-						Transaction t = Cat.newTransaction("Processor", "index-" + m_index);
+					if (tree != null) {
+						if (isMonitor()) {
+							Transaction t = Cat.newTransaction("Processor", "index-" + m_index);
 
-						processMessage(tree);
-						t.setStatus(Transaction.SUCCESS);
-						t.complete();
-					} else {
-						processMessage(tree);
+							processMessage(tree);
+							t.setStatus(Transaction.SUCCESS);
+							t.complete();
+						} else {
+							processMessage(tree);
+						}
 					}
 				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
-		} catch (InterruptedException e) {
-			// ignore it
-		}
+		} finally {
+			while ((tree = m_queue.poll()) != null) {
+				ReferenceCountUtil.safeRelease(tree.getBuffer());
+			}
 
-		// Cat.logEvent("BlockSize", String.valueOf(m_blocks.size()),
-		// Event.SUCCESS, m_blocks.keySet().toString());
-
-		for (Block block : m_blocks.values()) {
 			try {
-				block.finish();
-
-				m_dumper.dump(block);
-			} catch (IOException e) {
-				// ignore it
+				for (Block block : m_blocks.values()) {
+					try {
+						block.finish();
+						m_dumper.dump(block);
+					} catch (Throwable e) {
+						Cat.logError(e);
+					}
+				}
+			} finally {
+				m_blocks.clear();
+				m_latch.countDown();
 			}
 		}
-
-		m_blocks.clear();
-		m_latch.countDown();
 	}
 
 	@Override
-	public void shutdown() {
+	public void close() {
 		m_enabled.set(false);
 
 		try {
@@ -190,5 +222,11 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		} catch (InterruptedException e) {
 			// ignore it
 		}
+	}
+
+	@Override
+	public void shutdown() {
+		// The owning dumper closes processors only after all analyzer input has drained.
+		// The global thread hook is unordered, so it must not stop storage producers early.
 	}
 }

@@ -20,9 +20,11 @@ package org.unidal.cat.message.storage.local;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -95,6 +97,27 @@ public class LocalBucketManager extends ContainerHolder implements BucketManager
 	@Override
 	public void enableLogging(Logger logger) {
 		m_logger = logger;
+	}
+
+	@Override
+	public synchronized void flushBuckets(int hour) {
+		Map<String, Bucket> buckets = m_buckets.get(hour);
+
+		if (buckets != null) {
+			List<Bucket> snapshot;
+
+			synchronized (buckets) {
+				snapshot = new ArrayList<Bucket>(buckets.values());
+			}
+
+			for (Bucket bucket : snapshot) {
+				try {
+					bucket.flush();
+				} catch (Exception e) {
+					Cat.logError(e);
+				}
+			}
+		}
 	}
 
 	private Map<String, Bucket> findOrCreateMap(Map<Integer, Map<String, Bucket>> map, int hour) {

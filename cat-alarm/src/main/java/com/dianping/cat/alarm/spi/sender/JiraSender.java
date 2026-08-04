@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * Jira Software 发送
  *
- * @author <a href="mailto:shiyindaxiaojie@gmail.com">gyl</a>
+ * @author <a href="mailto:guoyuanlu@puyiwm">gyl</a>
  * @since 3.3.3
  */
 public class JiraSender extends AbstractSender {

@@ -116,7 +116,7 @@ public abstract class BaseCompositeModelService<T> extends ModelServiceWithCalSu
 			}
 			requireSize++;
 
-			m_configManager.getModelServiceExecutorService().submit(new Runnable() {
+			m_configManager.getReportQueryExecutorService().submit(new Runnable() {
 				@Override
 				public void run() {
 					try {

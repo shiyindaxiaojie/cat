@@ -42,7 +42,9 @@ import org.unidal.lookup.annotation.Named;
 import org.unidal.tuple.Pair;
 import org.xml.sax.SAXException;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -50,6 +52,18 @@ import java.util.regex.Pattern;
 
 @Named
 public class ServerConfigManager implements LogEnabled, Initializable {
+	static final int DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD = 10000;
+
+	static final int DEFAULT_MAX_MESSAGE_SIZE = 4 * 1024 * 1024;
+
+	static final int MAX_ALLOWED_MESSAGE_SIZE = 64 * 1024 * 1024;
+
+	static final int DEFAULT_NETTY_WORKER_AUTO_MAX = 4;
+
+	public static final String REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD =
+				"realtime-analyzer-queue-capacity-per-thread";
+
+	public static final String REPORT_QUERY_THREADS = "report-query-threads";
 
 	public static final String DUMP_DIR = "dump";
 
@@ -62,6 +76,8 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	public final static String SEND_MACHINE = "send-machine";
 
 	public final static String ALARM_MACHINE = "alarm-machine";
+
+	public final static String CONSUMER_MACHINE = "consumer-machine";
 
 	public final static String HDFS_ENABLED = "hdfs-enabled";
 
@@ -307,19 +323,289 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getMessageDumpThreads() {
-		return Integer.parseInt(getProperty("message-dumper-thread", "5"));
+		return getPositiveIntProperty("message-dumper-thread", 5);
 	}
 
 	public int getMessageProcessorThreads() {
-		return Integer.parseInt(getProperty("message-processor-thread", "20"));
+		return getPositiveIntProperty("message-processor-thread", 8);
 	}
 
-	public ExecutorService getModelServiceExecutorService() {
+	public int getMessageProcessorQueueSize() {
+		return getPositiveIntProperty("message-processor-queue-size", 5000);
+	}
+
+	public int getNettyBossThreads() {
+		return getPositiveIntProperty("netty-boss-threads", 1);
+	}
+
+	public int getNettyWorkerThreads() {
+		String configuredValue = getProperty("netty-worker-threads", "auto");
+
+		if (configuredValue == null || configuredValue.trim().length() == 0
+				|| "auto".equalsIgnoreCase(configuredValue.trim())) {
+			return getAutoNettyWorkerThreads();
+		}
+
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid netty-worker-threads(%s), using auto value.", configuredValue));
+		}
+		return getAutoNettyWorkerThreads();
+	}
+
+	protected int getAutoNettyWorkerThreads() {
+		int runtimeProcessors = Math.max(1, getRuntimeAvailableProcessors());
+		int cgroupProcessors = getCgroupCpuLimit();
+		int detectedProcessors;
+
+		if (cgroupProcessors > 0) {
+			detectedProcessors = Math.min(runtimeProcessors, cgroupProcessors);
+		} else if (isKubernetesEnvironment()) {
+			detectedProcessors = 1;
+		} else {
+			detectedProcessors = runtimeProcessors;
+		}
+
+		return Math.max(1, Math.min(detectedProcessors, DEFAULT_NETTY_WORKER_AUTO_MAX));
+	}
+
+	protected int getRuntimeAvailableProcessors() {
+		return Runtime.getRuntime().availableProcessors();
+	}
+
+	protected boolean isKubernetesEnvironment() {
+		return System.getenv("KUBERNETES_SERVICE_HOST") != null;
+	}
+
+	protected int getCgroupCpuLimit() {
+		int quotaProcessors = readCpuQuota();
+		int cpusetProcessors = readCpuSet();
+
+		if (quotaProcessors > 0 && cpusetProcessors > 0) {
+			return Math.min(quotaProcessors, cpusetProcessors);
+		}
+		return Math.max(quotaProcessors, cpusetProcessors);
+	}
+
+	private int readCpuQuota() {
+		String cpuMax = readFirstLine("/sys/fs/cgroup/cpu.max");
+
+		if (cpuMax != null) {
+			String[] values = cpuMax.trim().split("\\s+");
+
+			if (values.length >= 2 && !"max".equals(values[0])) {
+				int processors = calculateQuotaProcessors(values[0], values[1]);
+
+				if (processors > 0) {
+					return processors;
+				}
+			}
+		}
+
+		String[][] cgroupV1Files = {
+				{ "/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu/cpu.cfs_period_us" },
+				{ "/sys/fs/cgroup/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu.cfs_period_us" } };
+
+		for (String[] files : cgroupV1Files) {
+			int processors = calculateQuotaProcessors(readFirstLine(files[0]), readFirstLine(files[1]));
+
+			if (processors > 0) {
+				return processors;
+			}
+		}
+		return -1;
+	}
+
+	private int readCpuSet() {
+		String[] files = { "/sys/fs/cgroup/cpuset.cpus.effective", "/sys/fs/cgroup/cpuset/cpuset.cpus",
+				"/sys/fs/cgroup/cpuset.cpus" };
+
+		for (String file : files) {
+			int processors = countCpuSet(readFirstLine(file));
+
+			if (processors > 0) {
+				return processors;
+			}
+		}
+		return -1;
+	}
+
+	private int calculateQuotaProcessors(String quotaValue, String periodValue) {
+		try {
+			long quota = Long.parseLong(quotaValue);
+			long period = Long.parseLong(periodValue);
+
+			if (quota > 0 && period > 0) {
+				long processors = quota / period + (quota % period == 0 ? 0 : 1);
+
+				return (int) Math.min(processors, Integer.MAX_VALUE);
+			}
+		} catch (Exception e) {
+			// Missing or malformed cgroup values are handled by the safe fallback.
+		}
+		return -1;
+	}
+
+	private int countCpuSet(String value) {
+		if (value == null || value.trim().length() == 0) {
+			return -1;
+		}
+
+		int count = 0;
+
+		try {
+			for (String item : value.trim().split(",")) {
+				int separator = item.indexOf('-');
+
+				if (separator < 0) {
+					Integer.parseInt(item);
+					count++;
+				} else {
+					int start = Integer.parseInt(item.substring(0, separator));
+					int end = Integer.parseInt(item.substring(separator + 1));
+
+					if (end < start) {
+						return -1;
+					}
+					count += end - start + 1;
+				}
+			}
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+		return count;
+	}
+
+	private String readFirstLine(String path) {
+		File file = new File(path);
+
+		if (!file.isFile()) {
+			return null;
+		}
+
+		try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+			return reader.readLine();
+		} catch (IOException e) {
+			return null;
+		}
+	}
+
+	public boolean isDailyCheckpointEnabled() {
+		return Boolean.parseBoolean(getProperty("daily-checkpoint-enabled", "true"));
+	}
+
+	public int getDailyCheckpointHour() {
+		return getIntPropertyInRange("daily-checkpoint-hour", 4, 0, 23);
+	}
+
+	public int getDailyCheckpointMinute() {
+		return getIntPropertyInRange("daily-checkpoint-minute", 0, 0, 59);
+	}
+
+	public int getGracefulShutdownTimeoutSeconds() {
+		return getIntPropertyInRange("graceful-shutdown-timeout-seconds", 25, 1, 300);
+	}
+
+	public int getMaxMessageSize() {
+		int value = getPositiveIntProperty("max-message-size", DEFAULT_MAX_MESSAGE_SIZE);
+
+		if (value <= MAX_ALLOWED_MESSAGE_SIZE) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("max-message-size(%s) exceeds the safety limit(%s), using %s.", value,
+						MAX_ALLOWED_MESSAGE_SIZE, DEFAULT_MAX_MESSAGE_SIZE));
+		}
+		return DEFAULT_MAX_MESSAGE_SIZE;
+	}
+
+	public int getQueueCapacityPerThreadOfRealtimeAnalyzer(String name) {
+		String defaultQueueCapacity = getProperty(REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD,
+							String.valueOf(DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD));
+		int fallbackQueueCapacity = parsePositiveInt(defaultQueueCapacity,
+							DEFAULT_REALTIME_ANALYZER_QUEUE_CAPACITY_PER_THREAD);
+		String queueCapacity = getProperty(name + "-analyzer-queue-capacity-per-thread", defaultQueueCapacity);
+		int value = parsePositiveInt(queueCapacity, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid realtime analyzer queue capacity per thread(%s) for %s, using %s.",
+						queueCapacity, name, fallbackQueueCapacity));
+		}
+		return fallbackQueueCapacity;
+	}
+
+	private int parsePositiveInt(String value, int defaultValue) {
+		try {
+			int parsed = Integer.parseInt(value);
+
+			return parsed > 0 ? parsed : defaultValue;
+		} catch (NumberFormatException e) {
+			return defaultValue;
+		}
+	}
+
+	private int getPositiveIntProperty(String name, int defaultValue) {
+		String configuredValue = getProperty(name, String.valueOf(defaultValue));
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid positive integer property %s(%s), using %s.", name, configuredValue,
+						defaultValue));
+		}
+		return defaultValue;
+	}
+
+	private int getIntPropertyInRange(String name, int defaultValue, int minValue, int maxValue) {
+		String configuredValue = getProperty(name, String.valueOf(defaultValue));
+
+		try {
+			int value = Integer.parseInt(configuredValue);
+
+			if (value >= minValue && value <= maxValue) {
+				return value;
+			}
+		} catch (NumberFormatException e) {
+			// Fall through to the configured default and warning below.
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid integer property %s(%s), expected %s-%s, using %s.", name,
+					configuredValue, minValue, maxValue, defaultValue));
+		}
+		return defaultValue;
+	}
+
+	public ExecutorService getReportQueryExecutorService() {
 		return m_threadPool;
 	}
 
-	public int getModelServiceThreads() {
-		return Integer.parseInt(getProperty("model-service-thread", "100"));
+	public int getReportQueryThreads() {
+		String configuredValue = getProperty(REPORT_QUERY_THREADS, "32");
+		int value = parsePositiveInt(configuredValue, -1);
+
+		if (value > 0) {
+			return value;
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid positive integer property %s(%s), using 32.", REPORT_QUERY_THREADS,
+						configuredValue));
+		}
+		return 32;
 	}
 
 	public String getProperty(String name, String defaultValue) {
@@ -370,7 +656,7 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 	}
 
 	public int getThreadsOfRealtimeAnalyzer(String name) {
-		return Integer.parseInt(getProperty(name + "-analyzer-threads", "2"));
+		return getPositiveIntProperty(name + "-analyzer-threads", 2);
 	}
 
 	@Override
@@ -476,6 +762,10 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		return Boolean.parseBoolean(getProperty(ALARM_MACHINE, "false"));
 	}
 
+	public boolean isConsumerMachine() {
+		return Boolean.parseBoolean(getProperty(CONSUMER_MACHINE, "true"));
+	}
+
 	public boolean isHarMode() {
 		if (m_server != null) {
 			return m_server.getStorage().isHarMode();
@@ -522,15 +812,16 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		}
 		m_logger.info("CAT server is running with hdfs," + isHdfsOn());
 		m_logger.info("CAT server is running with alert," + isAlertMachine());
+		m_logger.info("CAT server is running with consumer," + isConsumerMachine());
 		m_logger.info("CAT server is running with job," + isJobMachine());
 
 		if (m_server != null) {
 			m_logger.info(m_server.toString());
 
 			if (isLocalMode()) {
-				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ModelService", 5);
+				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ReportQuery", 5);
 			} else {
-				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ModelService", getModelServiceThreads());
+				m_threadPool = Threads.forPool().getFixedThreadPool("Cat-ReportQuery", getReportQueryThreads());
 			}
 		}
 	}

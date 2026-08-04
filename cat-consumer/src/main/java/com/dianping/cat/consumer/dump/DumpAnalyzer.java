@@ -23,6 +23,7 @@ import com.dianping.cat.analysis.AbstractMessageAnalyzer;
 import com.dianping.cat.analysis.MessageAnalyzer;
 import com.dianping.cat.message.Transaction;
 import com.dianping.cat.message.internal.MessageId;
+import com.dianping.cat.message.io.BufReleaseHelper;
 import com.dianping.cat.message.spi.MessageTree;
 import com.dianping.cat.report.ReportManager;
 import com.dianping.cat.statistic.ServerStatisticManager;
@@ -31,7 +32,6 @@ import org.codehaus.plexus.logging.Logger;
 import org.unidal.cat.message.storage.MessageDumper;
 import org.unidal.cat.message.storage.MessageDumperManager;
 import org.unidal.cat.message.storage.MessageFinderManager;
-import org.unidal.helper.Threads;
 import org.unidal.lookup.annotation.Inject;
 import org.unidal.lookup.annotation.Named;
 
@@ -72,16 +72,14 @@ public class DumpAnalyzer extends AbstractMessageAnalyzer<Object> implements Log
 
 	@Override
 	public synchronized void doCheckpoint(boolean atEnd) {
-		if (atEnd) {
-			Threads.forGroup("cat").start(new Runnable() {
-				@Override
-				public void run() {
-					closeStorage();
-				}
-			});
-		} else {
-			closeStorage();
-		}
+		closeStorage();
+	}
+
+	@Override
+	public synchronized void doSnapshot() {
+		int hour = (int) TimeUnit.MILLISECONDS.toHours(m_startTime);
+
+		m_dumperManager.flush(hour);
 	}
 
 	@Override
@@ -114,25 +112,33 @@ public class DumpAnalyzer extends AbstractMessageAnalyzer<Object> implements Log
 
 	@Override
 	public void process(MessageTree tree) {
+		boolean bufferHandled = false;
+
 		try {
 			MessageId messageId = MessageId.parse(tree.getMessageId());
 
 			if (!shouldDiscard(messageId)) {
-				processWithStorage(tree, messageId, messageId.getHour());
+				bufferHandled = processWithStorage(tree, messageId, messageId.getHour());
 			}
 		} catch (Exception ignored) {
+		} finally {
+			if (!bufferHandled) {
+				BufReleaseHelper.release(tree.getBuffer());
+			}
 		}
 	}
 
-	private void processWithStorage(MessageTree tree, MessageId messageId, int hour) {
+	private boolean processWithStorage(MessageTree tree, MessageId messageId, int hour) {
 		MessageDumper dumper = m_dumperManager.find(hour);
 
 		tree.setFormatMessageId(messageId);
 
 		if (dumper != null) {
 			dumper.process(tree);
+			return true;
 		} else {
 			m_serverStateManager.addPigeonTimeError(1);
+			return false;
 		}
 	}
 

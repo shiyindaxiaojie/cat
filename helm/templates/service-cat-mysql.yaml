@@ -1,19 +1,19 @@
+{{- if .Values.cat.mysql.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  namespace: {{ .Release.Namespace }}
   name: {{ include "cat.mysql.name" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "cat.module.labels" . | nindent 4 }}
-    {{- with .Values.cat.mysql.labels }}
-        {{- toYaml . | nindent 6 }}
-    {{- end }}
 spec:
-  type: {{ .Values.cat.mysql.servicetype | default "ClusterIP" }}
+  clusterIP: None
+  publishNotReadyAddresses: true
   ports:
-    - port: {{ .Values.cat.mysql.port | default "3306" }}
-      targetPort: tcp
+    - name: mysql
+      port: {{ .Values.cat.mysql.port }}
+      targetPort: mysql
       protocol: TCP
-      name: tcp
   selector:
     {{- include "cat.mysql.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -7,6 +7,18 @@
 		<th width="10%">发布时间</th>
 	</tr>
 	<tr>
+		<td>3.4.3</td>
+		<td>修复启动 JVM 参数不生效问题，服务端配置新增 Netty、消息队列、线程数配置</td>
+		<td>梦想歌</td>
+		<td>2026-08-03</td>
+	</tr>
+	<tr>
+		<td>3.4.2</td>
+		<td>优化 CAT 集群部署，修复 MySQL 兼容 MySQL8</td>
+		<td>梦想歌</td>
+		<td>2025-05-14</td>
+	</tr>
+	<tr>
 		<td>3.4.1</td>
 		<td>修复 HeartBeat 监控告警交互问题</td>
 		<td>梦想歌</td>

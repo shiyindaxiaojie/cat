@@ -10,7 +10,7 @@ import com.dianping.cat.alarm.spi.AlertChannel;
  */
 public class FeishuSpliter implements Spliter {
 
-	public static final String ID = AlertChannel.DINGTALK.getName();
+	public static final String ID = AlertChannel.FEISHU.getName();
 
 	@Override
 	public String process(String content) {

@@ -25,20 +25,22 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.codehaus.plexus.logging.Logger;
 import org.unidal.helper.Threads;
 import org.unidal.lookup.annotation.Inject;
 
 import com.dianping.cat.Cat;
+import com.dianping.cat.config.server.ServerConfigManager;
 import com.dianping.cat.message.io.DefaultMessageQueue;
 import com.dianping.cat.message.spi.MessageQueue;
 import com.dianping.cat.message.spi.MessageTree;
 import com.dianping.cat.statistic.ServerStatisticManager;
 
 public class Period {
-	private static final int QUEUE_SIZE = 30000;
-
 	private long m_startTime;
 
 	private long m_endTime;
@@ -54,23 +56,35 @@ public class Period {
 	@Inject
 	private Logger m_logger;
 
+	private ServerConfigManager m_serverConfigManager;
+
+	private AtomicBoolean m_finished = new AtomicBoolean(false);
+
+	private CountDownLatch m_finishCompletion = new CountDownLatch(1);
+
 	public Period(long startTime, long endTime, MessageAnalyzerManager analyzerManager,
-							ServerStatisticManager serverStateManager, Logger logger) {
+							ServerStatisticManager serverStateManager, ServerConfigManager serverConfigManager, Logger logger) {
 		m_startTime = startTime;
 		m_endTime = endTime;
 		m_analyzerManager = analyzerManager;
 		m_serverStateManager = serverStateManager;
+		m_serverConfigManager = serverConfigManager;
 		m_logger = logger;
 
 		List<String> names = m_analyzerManager.getAnalyzerNames();
 
 		m_tasks = new HashMap<String, List<PeriodTask>>();
 		for (String name : names) {
+			if (!m_serverConfigManager.getEnableOfRealtimeAnalyzer(name)) {
+				continue;
+			}
+
 			List<MessageAnalyzer> messageAnalyzers = m_analyzerManager.getAnalyzer(name, startTime);
+			int queueSize = m_serverConfigManager.getQueueCapacityPerThreadOfRealtimeAnalyzer(name);
 
 			for (MessageAnalyzer analyzer : messageAnalyzers) {
-				MessageQueue queue = new DefaultMessageQueue(QUEUE_SIZE);
-				PeriodTask task = new PeriodTask(analyzer, queue, startTime);
+				MessageQueue queue = new DefaultMessageQueue(queueSize);
+				PeriodTask task = new PeriodTask(analyzer, queue, startTime, queueSize);
 
 				task.enableLogging(m_logger);
 
@@ -85,45 +99,67 @@ public class Period {
 		}
 	}
 
-	public void distribute(MessageTree tree) {
-		m_serverStateManager.addMessageTotal(tree.getDomain(), 1);
+	public boolean distribute(MessageTree tree) {
+		if (m_finished.get()) {
+			return false;
+		}
+
+		boolean bufferTransferred = false;
 		boolean success = true;
 		String domain = tree.getDomain();
 
+		try {
+			m_serverStateManager.addMessageTotal(domain, 1);
+		} catch (Throwable e) {
+			Cat.logError(e);
+		}
+
 		for (Entry<String, List<PeriodTask>> entry : m_tasks.entrySet()) {
-			List<PeriodTask> tasks = entry.getValue();
-			int length = tasks.size();
-			int index = 0;
-			boolean manyTasks = length > 1;
+			try {
+				List<PeriodTask> tasks = entry.getValue();
+				int length = tasks.size();
+				int index = 0;
+				boolean manyTasks = length > 1;
 
-			if (manyTasks) {
-				index = Math.abs(domain.hashCode()) % length;
-			}
-			PeriodTask task = tasks.get(index);
-			boolean enqueue = task.enqueue(tree);
-
-			if (!enqueue) {
 				if (manyTasks) {
+					index = Math.floorMod(domain == null ? 0 : domain.hashCode(), length);
+				}
+				PeriodTask task = tasks.get(index);
+				boolean enqueue = task.enqueue(tree);
+
+				if (!enqueue && manyTasks) {
 					task = tasks.get((index + 1) % length);
 					enqueue = task.enqueue(tree);
-
-					if (!enqueue) {
-						success = false;
-					}
-				} else {
-					success = false;
 				}
+
+				if (!enqueue) {
+					success = false;
+				} else if ("dump".equals(entry.getKey())) {
+					bufferTransferred = true;
+				}
+			} catch (Throwable e) {
+				success = false;
+				Cat.logError(e);
 			}
 		}
 
 		if ((!success) && (!tree.isProcessLoss())) {
-			m_serverStateManager.addMessageTotalLoss(tree.getDomain(), 1);
-
-			tree.setProcessLoss(true);
+			try {
+				m_serverStateManager.addMessageTotalLoss(domain, 1);
+				tree.setProcessLoss(true);
+			} catch (Throwable e) {
+				Cat.logError(e);
+			}
 		}
+
+		return bufferTransferred;
 	}
 
 	public void finish() {
+		if (!m_finished.compareAndSet(false, true)) {
+			return;
+		}
+
 		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Date startDate = new Date(m_startTime);
 		Date endDate = new Date(m_endTime - 1);
@@ -142,6 +178,96 @@ public class Period {
 		} finally {
 			m_logger.info(String
 									.format("Finished %s tasks in period [%s, %s]", m_tasks.size(), df.format(startDate),	df.format(endDate)));
+			m_finishCompletion.countDown();
+		}
+	}
+
+	public void doSnapshot() {
+		if (m_finished.get()) {
+			return;
+		}
+		checkpoint(false, false, true);
+	}
+
+	private void checkpoint(boolean atEnd, boolean destroy, boolean snapshot) {
+		for (Entry<String, List<PeriodTask>> entry : m_tasks.entrySet()) {
+			if (!"dump".equals(entry.getKey())) {
+				checkpoint(entry.getValue(), atEnd, destroy, snapshot);
+			}
+		}
+
+		List<PeriodTask> dumpTasks = m_tasks.get("dump");
+
+		if (dumpTasks != null && !dumpTasks.isEmpty()) {
+			// Dump analyzers share one MessageDumperManager for the hour; one flush/close is sufficient.
+			checkpoint(dumpTasks.subList(0, 1), atEnd, destroy, snapshot);
+
+			if (destroy) {
+				for (int i = 1; i < dumpTasks.size(); i++) {
+					try {
+						dumpTasks.get(i).getAnalyzer().destroy();
+					} catch (Throwable e) {
+						Cat.logError(e);
+					}
+				}
+			}
+		}
+	}
+
+	private void checkpoint(List<PeriodTask> tasks, boolean atEnd, boolean destroy, boolean snapshot) {
+		for (PeriodTask task : tasks) {
+			try {
+				if (snapshot) {
+					task.getAnalyzer().doSnapshot();
+				} else {
+					task.getAnalyzer().doCheckpoint(atEnd);
+				}
+
+				if (destroy) {
+					task.getAnalyzer().destroy();
+				}
+			} catch (Throwable e) {
+				Cat.logError(e);
+			}
+		}
+	}
+
+	public void shutdownAndCheckpoint(long timeoutMillis) {
+		if (!m_finished.compareAndSet(false, true)) {
+			try {
+				m_finishCompletion.await(Math.max(0, timeoutMillis), TimeUnit.MILLISECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			return;
+		}
+
+		long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
+
+		for (List<PeriodTask> tasks : m_tasks.values()) {
+			for (PeriodTask task : tasks) {
+				task.stop();
+			}
+		}
+
+		for (List<PeriodTask> tasks : m_tasks.values()) {
+			for (PeriodTask task : tasks) {
+				long remaining = deadline - System.currentTimeMillis();
+
+				try {
+					if (remaining <= 0 || !task.awaitTermination(remaining, TimeUnit.MILLISECONDS)) {
+						m_logger.warn("Timed out draining analyzer " + task.getName() + " before checkpoint.");
+					}
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+		}
+
+		try {
+			checkpoint(false, true, false);
+		} finally {
+			m_finishCompletion.countDown();
 		}
 	}
 
