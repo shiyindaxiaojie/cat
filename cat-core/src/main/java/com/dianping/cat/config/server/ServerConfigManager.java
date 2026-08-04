@@ -336,6 +336,22 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		return getPositiveIntProperty("netty-worker-threads", 1);
 	}
 
+	public boolean isDailyCheckpointEnabled() {
+		return Boolean.parseBoolean(getProperty("daily-checkpoint-enabled", "true"));
+	}
+
+	public int getDailyCheckpointHour() {
+		return getIntPropertyInRange("daily-checkpoint-hour", 4, 0, 23);
+	}
+
+	public int getDailyCheckpointMinute() {
+		return getIntPropertyInRange("daily-checkpoint-minute", 0, 0, 59);
+	}
+
+	public int getGracefulShutdownTimeoutSeconds() {
+		return getIntPropertyInRange("graceful-shutdown-timeout-seconds", 25, 1, 300);
+	}
+
 	public int getMaxMessageSize() {
 		int value = getPositiveIntProperty("max-message-size", DEFAULT_MAX_MESSAGE_SIZE);
 
@@ -390,6 +406,26 @@ public class ServerConfigManager implements LogEnabled, Initializable {
 		if (m_logger != null) {
 			m_logger.warn(String.format("Invalid positive integer property %s(%s), using %s.", name, configuredValue,
 						defaultValue));
+		}
+		return defaultValue;
+	}
+
+	private int getIntPropertyInRange(String name, int defaultValue, int minValue, int maxValue) {
+		String configuredValue = getProperty(name, String.valueOf(defaultValue));
+
+		try {
+			int value = Integer.parseInt(configuredValue);
+
+			if (value >= minValue && value <= maxValue) {
+				return value;
+			}
+		} catch (NumberFormatException e) {
+			// Fall through to the configured default and warning below.
+		}
+
+		if (m_logger != null) {
+			m_logger.warn(String.format("Invalid integer property %s(%s), expected %s-%s, using %s.", name,
+					configuredValue, minValue, maxValue, defaultValue));
 		}
 		return defaultValue;
 	}

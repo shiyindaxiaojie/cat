@@ -30,6 +30,19 @@
 			<property name="max-message-size" value="4194304"/>
 
 			<!--
+				Kubernetes 发送 SIGTERM 时，CAT 会停止 TCP 接收、排空实时分析队列并完成最终落盘，不再需要 preStop curl。
+				该超时应小于 Pod 的 terminationGracePeriodSeconds；默认 25 秒，建议 Pod 至少保留 30 秒。
+			-->
+			<property name="graceful-shutdown-timeout-seconds" value="25"/>
+			<!--
+				每天在线快照开关和执行时间。在线快照会刷新报表及原始消息文件，但不会关闭当前小时存储，也不会停止 TCP 接收。
+				每个 StatefulSet Pod 都保存自己的实时数据，因此每个 Pod 都应执行；hour 为 0-23，minute 为 0-59。
+			-->
+			<property name="daily-checkpoint-enabled" value="true"/>
+			<property name="daily-checkpoint-hour" value="4"/>
+			<property name="daily-checkpoint-minute" value="0"/>
+
+			<!--
 				消息持久化线程数：负责把收到的消息写入本地或 HDFS 存储。
 				每个线程都有一个独立队列；增加线程会同时增加并行写入量、内存占用和磁盘压力，修改后需要重启。
 			-->

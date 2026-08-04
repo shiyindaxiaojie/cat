@@ -21,6 +21,8 @@ package com.dianping.cat.analysis;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.codehaus.plexus.logging.LogEnabled;
 import org.codehaus.plexus.logging.Logger;
@@ -50,6 +52,8 @@ public class PeriodTask implements Task, LogEnabled {
 	private Logger m_logger;
 
 	private int m_index;
+
+	private CountDownLatch m_completion = new CountDownLatch(1);
 
 	public PeriodTask(MessageAnalyzer analyzer, MessageQueue queue, long startTime) {
 		this(analyzer, queue, startTime, Integer.MAX_VALUE);
@@ -108,8 +112,14 @@ public class PeriodTask implements Task, LogEnabled {
 
 	public void finish() {
 		try {
+			stop();
+			if (!awaitTermination(30, TimeUnit.SECONDS) && m_logger != null) {
+				m_logger.warn("Timed out draining analyzer " + getName() + " at period end.");
+			}
 			m_analyzer.doCheckpoint(true);
 			m_analyzer.destroy();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		} catch (Exception e) {
 			Cat.logError(e);
 		}
@@ -133,13 +143,24 @@ public class PeriodTask implements Task, LogEnabled {
 			m_analyzer.analyze(m_queue);
 		} catch (Exception e) {
 			Cat.logError(e);
+		} finally {
+			m_completion.countDown();
 		}
 	}
 
 	@Override
 	public void shutdown() {
+		// The JVM thread manager has an unordered shutdown hook. The owning Period
+		// stops this task only after the TCP receiver has stopped accepting messages.
+	}
+
+	public void stop() {
 		if (m_analyzer instanceof AbstractMessageAnalyzer) {
 			((AbstractMessageAnalyzer<?>) m_analyzer).shutdown();
 		}
+	}
+
+	public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+		return m_completion.await(timeout, unit);
 	}
 }

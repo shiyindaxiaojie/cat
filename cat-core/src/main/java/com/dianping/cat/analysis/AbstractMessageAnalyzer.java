@@ -104,6 +104,11 @@ public abstract class AbstractMessageAnalyzer<R> extends ContainerHolder impleme
 	public abstract void doCheckpoint(boolean atEnd);
 
 	@Override
+	public void doSnapshot() {
+		doCheckpoint(false);
+	}
+
+	@Override
 	public int getAnanlyzerCount(String name) {
 		return m_serverConfigManager.getThreadsOfRealtimeAnalyzer(name);
 	}

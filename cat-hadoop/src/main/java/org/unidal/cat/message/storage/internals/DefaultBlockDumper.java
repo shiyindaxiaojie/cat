@@ -81,13 +81,13 @@ public class DefaultBlockDumper extends ContainerHolder implements BlockDumper, 
 		}
 
 		for (final BlockWriter writer : m_writers) {
-			writer.shutdown();
+			writer.close();
 			super.release(writer);
 		}
 	}
 
 	@Override
-	public void dump(Block block) throws IOException {
+	public synchronized void dump(Block block) throws IOException {
 		String domain = block.getDomain();
 		int hash = Math.abs(domain.hashCode());
 		int index = hash % m_writers.size();
@@ -103,6 +103,29 @@ public class DefaultBlockDumper extends ContainerHolder implements BlockDumper, 
 			}
 		} else {
 			m_statisticManager.addBlockTotal(1);
+		}
+	}
+
+	@Override
+	public synchronized void flush() throws InterruptedException {
+		while (true) {
+			boolean allEmpty = true;
+
+			for (BlockingQueue<Block> queue : m_queues) {
+				if (!queue.isEmpty()) {
+					allEmpty = false;
+					break;
+				}
+			}
+
+			if (allEmpty) {
+				break;
+			}
+			TimeUnit.MILLISECONDS.sleep(1);
+		}
+
+		for (BlockWriter writer : m_writers) {
+			writer.flush();
 		}
 	}
 
