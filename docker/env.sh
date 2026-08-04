@@ -120,9 +120,15 @@ case "${GC_MODE:-G1}" in
             fail "CMS mode is only supported by this image when running Java 8."
         fi
 
+        XMN=${XMN:-512m}
+        validate_size XMN "${XMN}"
+        if [[ "$(size_in_bytes "${XMN}")" -ge "$(size_in_bytes "${XMX}")" ]]; then
+            fail "XMN must be smaller than XMX; got XMN='${XMN}' and XMX='${XMX}'."
+        fi
+
         echo "GC mode is CMS"
         append_java_opt "-XX:+UseConcMarkSweepGC"
-        append_java_opt "-Xmn${XMN:-512m}"
+        append_java_opt "-Xmn${XMN}"
         append_java_opt "-XX:ParallelGCThreads=${PARALLEL_GC_THREADS:-2}"
         append_java_opt "-XX:ConcGCThreads=${CONC_GC_THREADS:-1}"
         append_java_opt "-XX:+UseCMSInitiatingOccupancyOnly"
