@@ -64,7 +64,7 @@ public class Handler implements PageHandler<Context> {
 		case VIEW:
 			break;
 		case CHECKPOINT:
-			m_receiver.destory();
+			m_receiver.destroy();
 			m_realtimeConsumer.doCheckpoint();
 			break;
 		default:

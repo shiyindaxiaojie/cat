@@ -18,7 +18,13 @@
  */
 package com.dianping.cat.analysis;
 
+import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.codehaus.plexus.logging.LogEnabled;
 import org.codehaus.plexus.logging.Logger;
@@ -58,6 +64,14 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 
 	private Logger m_logger;
 
+	private AtomicBoolean m_shutdown = new AtomicBoolean(false);
+
+	private AtomicBoolean m_snapshotRunning = new AtomicBoolean(false);
+
+	private ScheduledExecutorService m_checkpointScheduler;
+
+	private CheckpointLock m_checkpointLock = new CheckpointLock();
+
 	@Override
 	public void consume(MessageTree tree) {
 		boolean bufferTransferred = false;
@@ -79,36 +93,34 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 	}
 
 	public void doCheckpoint() {
-		m_logger.info("starting do checkpoint.");
+		shutdownGracefully(m_serverConfigManager.getGracefulShutdownTimeoutSeconds() * 1000L);
+	}
+
+	@Override
+	public void doSnapshot() {
+		if (m_shutdown.get() || !m_snapshotRunning.compareAndSet(false, true)) {
+			return;
+		}
+
+		m_logger.info("Starting online checkpoint snapshot.");
 		MessageProducer cat = Cat.getProducer();
-		Transaction t = cat.newTransaction("Checkpoint", getClass().getSimpleName());
+		Transaction t = cat.newTransaction("Checkpoint", "OnlineSnapshot");
 
 		try {
-			long currentStartTime = getCurrentStartTime();
-			Period period = m_periodManager.findPeriod(currentStartTime);
-
-			for (MessageAnalyzer analyzer : period.getAnalyzers()) {
-				try {
-					analyzer.doCheckpoint(false);
-				} catch (Exception e) {
-					Cat.logError(e);
+			synchronized (m_checkpointLock) {
+				if (!m_shutdown.get()) {
+					m_periodManager.doSnapshot();
 				}
 			}
-
-			try {
-				// wait dump analyzer store completed
-				Thread.sleep(10 * 1000);
-			} catch (InterruptedException e) {
-				// ignore
-			}
 			t.setStatus(Message.SUCCESS);
-		} catch (RuntimeException e) {
+		} catch (Throwable e) {
 			cat.logError(e);
 			t.setStatus(e);
 		} finally {
 			t.complete();
+			m_snapshotRunning.set(false);
 		}
-		m_logger.info("end do checkpoint.");
+		m_logger.info("Finished online checkpoint snapshot.");
 	}
 
 	@Override
@@ -148,6 +160,68 @@ public class RealtimeConsumer extends ContainerHolder implements MessageConsumer
 		m_periodManager.init();
 
 		Threads.forGroup("cat").start(m_periodManager);
+		scheduleDailyCheckpoint();
+	}
+
+	private void scheduleDailyCheckpoint() {
+		if (!m_serverConfigManager.isDailyCheckpointEnabled()) {
+			return;
+		}
+
+		Calendar now = Calendar.getInstance();
+		Calendar next = (Calendar) now.clone();
+
+		next.set(Calendar.HOUR_OF_DAY, m_serverConfigManager.getDailyCheckpointHour());
+		next.set(Calendar.MINUTE, m_serverConfigManager.getDailyCheckpointMinute());
+		next.set(Calendar.SECOND, 0);
+		next.set(Calendar.MILLISECOND, 0);
+
+		if (!next.after(now)) {
+			next.add(Calendar.DAY_OF_MONTH, 1);
+		}
+
+		long initialDelay = next.getTimeInMillis() - now.getTimeInMillis();
+
+		m_checkpointScheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable runnable) {
+				Thread thread = new Thread(runnable, "Cat-OnlineCheckpoint");
+
+				thread.setDaemon(true);
+				return thread;
+			}
+		});
+		m_checkpointScheduler.scheduleAtFixedRate(new Runnable() {
+			@Override
+			public void run() {
+				doSnapshot();
+			}
+		}, initialDelay, TimeUnit.DAYS.toMillis(1), TimeUnit.MILLISECONDS);
+		m_logger.info(String.format("Daily online checkpoint scheduled at %02d:%02d.",
+					m_serverConfigManager.getDailyCheckpointHour(), m_serverConfigManager.getDailyCheckpointMinute()));
+	}
+
+	@Override
+	public void shutdownGracefully(long timeoutMillis) {
+		if (!m_shutdown.compareAndSet(false, true)) {
+			return;
+		}
+
+		m_logger.info("Starting graceful analyzer shutdown and final checkpoint.");
+
+		if (m_checkpointScheduler != null) {
+			m_checkpointScheduler.shutdown();
+		}
+
+		long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
+
+		synchronized (m_checkpointLock) {
+			m_periodManager.shutdownAndCheckpoint(Math.max(0, deadline - System.currentTimeMillis()));
+		}
+		m_logger.info("Finished graceful analyzer shutdown and final checkpoint.");
+	}
+
+	private static final class CheckpointLock {
 	}
 
 }

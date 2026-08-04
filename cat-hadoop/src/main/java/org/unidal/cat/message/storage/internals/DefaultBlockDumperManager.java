@@ -57,6 +57,19 @@ public class DefaultBlockDumperManager extends ContainerHolder implements LogEna
 	}
 
 	@Override
+	public synchronized void flush(int hour) {
+		BlockDumper dumper = m_map.get(hour);
+
+		if (dumper != null) {
+			try {
+				dumper.flush();
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	@Override
 	public BlockDumper findOrCreate(int hour) {
 		BlockDumper dumper = m_map.get(hour);
 

@@ -112,7 +112,7 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		return m_queue.poll(5, TimeUnit.MILLISECONDS);
 	}
 
-	private void processMessage(MessageTree tree) {
+	private synchronized void processMessage(MessageTree tree) {
 		MessageId id = tree.getFormatMessageId();
 		String domain = id.getDomain();
 		int hour = id.getHour();
@@ -151,6 +151,21 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 				ReferenceCountUtil.safeRelease(buffer);
 			}
 		}
+	}
+
+	@Override
+	public synchronized void flush() {
+		for (Block block : m_blocks.values()) {
+			try {
+				if (!block.getOffsets().isEmpty()) {
+					block.finish();
+					m_dumper.dump(block);
+				}
+			} catch (Throwable e) {
+				Cat.logError(e);
+			}
+		}
+		m_blocks.clear();
 	}
 
 	@Override
@@ -199,7 +214,7 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 	}
 
 	@Override
-	public void shutdown() {
+	public void close() {
 		m_enabled.set(false);
 
 		try {
@@ -207,5 +222,11 @@ public class DefaultMessageProcessor implements MessageProcessor, MessageFinder 
 		} catch (InterruptedException e) {
 			// ignore it
 		}
+	}
+
+	@Override
+	public void shutdown() {
+		// The owning dumper closes processors only after all analyzer input has drained.
+		// The global thread hook is unordered, so it must not stop storage producers early.
 	}
 }

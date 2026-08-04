@@ -61,6 +61,19 @@ public class DefaultMessageDumperManager extends ContainerHolder
 	}
 
 	@Override
+	public synchronized void flush(int hour) {
+		MessageDumper dumper = m_dumpers.get(hour);
+
+		if (dumper != null) {
+			try {
+				dumper.flush(hour);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		}
+	}
+
+	@Override
 	public MessageDumper find(int hour) {
 		return m_dumpers.get(hour);
 	}
