@@ -49,25 +49,43 @@
     <div class="cat-alarm-tip">
         <div class="cat-alarm-tip-container">
             <h4>配置说明：</h4>
-            <p>* local-mode : 定义服务是否为本地模式（开发模式），在生产环境时，设置为false,启动远程监听模式。默认为 false;</p>
-            <p>* hdfs-machine : 定义是否启用HDFS存储方式，默认为 false；</p>
-            <p>* job-machine : 定义当前服务是否为报告工作机（开启生成汇总报告和统计报告的任务，只需要一台服务机开启此功能），默认为 false；</p>
-            <p>* alarm-machine : 定义当前服务是否为报警机（开启各类报警监听，只需要一台服务机开启此功能），默认为 false；</p>
-            <p>* storage : 定义数据存储配置信息</p>
-            <p>* local-report-storage-time : 定义本地报告存放时长，单位为（天）</p>
-            <p>* local-logivew-storage-time : 定义本地日志存放时长，单位为（天）</p>
-            <p>* local-base-dir : 定义本地数据存储目录</p>
-            <p>* hdfs : 定义HDFS配置信息，便于直接登录系统</p>
-            <p>* server-uri : 定义HDFS服务地址</p>
-            <p>* remote-servers : 定义HTTP服务列表，（远程监听端同步更新服务端信息即取此值）</p>
-            <p>* netty-boss-threads : TCP 连接接收线程数，通常设置为 1；修改后需要重启</p>
-            <p>* netty-worker-threads : TCP 网络读写和解码线程数；按 Pod CPU limit 配置，1 核设 1，2 到 4 核通常设 2 到 4；修改后需要重启</p>
-            <p>* report-query-threads : 报表查询和模型合并的并发线程数，不参与消息接收或实时分析；修改后需要重启</p>
-            <p>* realtime-analyzer-queue-capacity-per-thread : 每个实时分析线程的默认队列容量，默认为 10000；下一个整点创建分析任务时生效，无需重启</p>
-            <p>* {name}-analyzer-queue-capacity-per-thread : 指定分析器每个线程的队列容量，优先于默认容量，例如 transaction-analyzer-queue-capacity-per-thread</p>
-            <p>* {name}-analyzer-enable : 动态启用或停用指定分析器，默认为 true；修改后在新的小时分析周期生效</p>
-            <p>* 可选分析器开关 : business、matrix、dependency、top、storage，分别对应 Business、性能报告、依赖分析、报错大盘和存储类报表</p>
-            <p>* {name}-analyzer-threads : 定义指定分析器线程数，默认为 2；修改后在新的小时分析周期生效</p>
+            <p><strong>server.properties（顺序与默认配置一致）</strong></p>
+            <p>* local-mode：本地开发模式；启用后不访问 HDFS，并把报表查询线程固定为 5，不建议生产环境开启。默认 false。</p>
+            <p>* job-machine：是否执行报表汇总、清理等定时任务；集群中通常只让少量节点承担。默认 false。</p>
+            <p>* send-machine：是否承担通知发送任务。默认 false。</p>
+            <p>* alarm-machine：是否执行告警计算任务；集群中应避免所有节点重复计算告警。默认 false。</p>
+            <p>* hdfs-enabled：是否启用 HDFS 存储；设置为 false 时使用本地目录。默认 false。</p>
+            <p>* remote-servers：CAT 控制台节点列表，格式为 host:HTTP端口，多个节点用英文逗号分隔；用于跨节点查询和跳转。</p>
+            <p>* netty-boss-threads：TCP 连接接收线程数，通常设置为 1；修改后需要重启。</p>
+            <p>* netty-worker-threads：TCP 网络读写和消息解码线程数；1 核 Pod 设置为 1，2 至 4 核通常设置为 2 至 4；修改后需要重启。</p>
+            <p>* report-query-threads：并行读取和合并 Transaction、Event 等报表模型的线程数，不参与消息接收或实时分析；修改后需要重启。</p>
+            <p>* max-message-size：单条 TCP 消息允许的最大字节数，默认 4194304（4 MiB）；超限消息会被拒绝，修改后需要重启。</p>
+            <p>* graceful-shutdown-timeout-seconds：收到 SIGTERM 后停止 TCP 接收、排空分析队列并最终落盘的最长时间，默认 25 秒；应小于 Pod 的 terminationGracePeriodSeconds。</p>
+            <p>* daily-checkpoint-enabled：是否启用每天在线快照；快照不会停止 TCP 接收，也不会关闭当前小时存储。默认 true。</p>
+            <p>* daily-checkpoint-hour：每天在线快照的小时，取值 0 至 23，默认 4。</p>
+            <p>* daily-checkpoint-minute：每天在线快照的分钟，取值 0 至 59，默认 0。</p>
+            <p>* message-processor-thread：将消息写入本地或 HDFS 的持久化线程数，默认 8；每个线程有独立队列，修改后需要重启。</p>
+            <p>* message-processor-queue-size：每个持久化线程的队列容量，默认 5000 条；所有队列总容量约等于线程数乘以该值，队列满时新消息会被丢弃。</p>
+            <p>* realtime-analyzer-queue-capacity-per-thread：每个实时分析器工作线程的默认队列容量，默认 10000 条；下一个整点创建新分析任务时生效，无需重启。</p>
+            <p>* top-analyzer-enable：是否启用监控大盘分析，按分钟汇总各应用的错误类型和错误机器排行。默认 true。</p>
+            <p>* business-analyzer-enable：是否启用业务指标分析，聚合客户端上报的 Metric 业务指标。默认 true。</p>
+            <p>* matrix-analyzer-enable：是否启用性能报告分析，统计 URL、Service、RPC 等调用的成功率和耗时分布。默认 true。</p>
+            <p>* storage-analyzer-enable：是否启用存储调用分析，统计数据库、缓存等调用的次数、耗时和错误情况。默认 true。</p>
+            <p>* dependency-analyzer-enable：是否启用服务依赖分析，分析应用与数据库、缓存、服务等下游资源之间的依赖关系。默认 true。</p>
+
+            <p><strong>分析器通用扩展项</strong></p>
+            <p>* {name}-analyzer-queue-capacity-per-thread：单独覆盖指定分析器每个线程的队列容量，例如 transaction-analyzer-queue-capacity-per-thread。</p>
+            <p>* {name}-analyzer-threads：指定分析器线程数，默认 2；下一个整点创建新分析任务时生效。</p>
+
+            <p><strong>storage / consumer</strong></p>
+            <p>* local-base-dir：本地数据存储目录。</p>
+            <p>* max-hdfs-storage-time：HDFS 数据最长保留时间，单位为天。</p>
+            <p>* local-report-storage-time：本地报表保留时间，单位为天。</p>
+            <p>* local-logivew-storage-time：本地原始日志保留时间，单位为天。</p>
+            <p>* har-mode：是否启用 HAR 归档模式。</p>
+            <p>* upload-thread：上传 HDFS 的并发线程数。</p>
+            <p>* hdfs / harfs：远程存储配置；max-size 为文件最大尺寸，server-uri 为服务地址，base-dir 为存储目录。</p>
+            <p>* long-config：Transaction、SQL、Service 的默认慢调用阈值；可使用 domain 子项为指定应用单独覆盖。</p>
         </div>
     </div>
 
