@@ -95,10 +95,6 @@ public class PeriodConfigTest {
 		}
 
 		@Override
-		public void doSnapshot() {
-		}
-
-		@Override
 		public int getAnanlyzerCount(String name) {
 			return 1;
 		}

@@ -25,7 +25,5 @@ public interface BlockDumper {
 
 	public void dump(Block block) throws IOException;
 
-	public void flush() throws InterruptedException;
-
 	public void initialize(int hour);
 }

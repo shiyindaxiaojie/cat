@@ -25,9 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.codehaus.plexus.logging.Logger;
 import org.unidal.helper.Threads;
@@ -57,10 +54,6 @@ public class Period {
 	private Logger m_logger;
 
 	private ServerConfigManager m_serverConfigManager;
-
-	private AtomicBoolean m_finished = new AtomicBoolean(false);
-
-	private CountDownLatch m_finishCompletion = new CountDownLatch(1);
 
 	public Period(long startTime, long endTime, MessageAnalyzerManager analyzerManager,
 							ServerStatisticManager serverStateManager, ServerConfigManager serverConfigManager, Logger logger) {
@@ -100,10 +93,6 @@ public class Period {
 	}
 
 	public boolean distribute(MessageTree tree) {
-		if (m_finished.get()) {
-			return false;
-		}
-
 		boolean bufferTransferred = false;
 		boolean success = true;
 		String domain = tree.getDomain();
@@ -156,10 +145,6 @@ public class Period {
 	}
 
 	public void finish() {
-		if (!m_finished.compareAndSet(false, true)) {
-			return;
-		}
-
 		SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Date startDate = new Date(m_startTime);
 		Date endDate = new Date(m_endTime - 1);
@@ -178,96 +163,6 @@ public class Period {
 		} finally {
 			m_logger.info(String
 									.format("Finished %s tasks in period [%s, %s]", m_tasks.size(), df.format(startDate),	df.format(endDate)));
-			m_finishCompletion.countDown();
-		}
-	}
-
-	public void doSnapshot() {
-		if (m_finished.get()) {
-			return;
-		}
-		checkpoint(false, false, true);
-	}
-
-	private void checkpoint(boolean atEnd, boolean destroy, boolean snapshot) {
-		for (Entry<String, List<PeriodTask>> entry : m_tasks.entrySet()) {
-			if (!"dump".equals(entry.getKey())) {
-				checkpoint(entry.getValue(), atEnd, destroy, snapshot);
-			}
-		}
-
-		List<PeriodTask> dumpTasks = m_tasks.get("dump");
-
-		if (dumpTasks != null && !dumpTasks.isEmpty()) {
-			// Dump analyzers share one MessageDumperManager for the hour; one flush/close is sufficient.
-			checkpoint(dumpTasks.subList(0, 1), atEnd, destroy, snapshot);
-
-			if (destroy) {
-				for (int i = 1; i < dumpTasks.size(); i++) {
-					try {
-						dumpTasks.get(i).getAnalyzer().destroy();
-					} catch (Throwable e) {
-						Cat.logError(e);
-					}
-				}
-			}
-		}
-	}
-
-	private void checkpoint(List<PeriodTask> tasks, boolean atEnd, boolean destroy, boolean snapshot) {
-		for (PeriodTask task : tasks) {
-			try {
-				if (snapshot) {
-					task.getAnalyzer().doSnapshot();
-				} else {
-					task.getAnalyzer().doCheckpoint(atEnd);
-				}
-
-				if (destroy) {
-					task.getAnalyzer().destroy();
-				}
-			} catch (Throwable e) {
-				Cat.logError(e);
-			}
-		}
-	}
-
-	public void shutdownAndCheckpoint(long timeoutMillis) {
-		if (!m_finished.compareAndSet(false, true)) {
-			try {
-				m_finishCompletion.await(Math.max(0, timeoutMillis), TimeUnit.MILLISECONDS);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-			return;
-		}
-
-		long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
-
-		for (List<PeriodTask> tasks : m_tasks.values()) {
-			for (PeriodTask task : tasks) {
-				task.stop();
-			}
-		}
-
-		for (List<PeriodTask> tasks : m_tasks.values()) {
-			for (PeriodTask task : tasks) {
-				long remaining = deadline - System.currentTimeMillis();
-
-				try {
-					if (remaining <= 0 || !task.awaitTermination(remaining, TimeUnit.MILLISECONDS)) {
-						m_logger.warn("Timed out draining analyzer " + task.getName() + " before checkpoint.");
-					}
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-				}
-			}
-		}
-
-		try {
-			checkpoint(false, true, false);
-		} finally {
-			m_finishCompletion.countDown();
 		}
 	}
 

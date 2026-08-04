@@ -32,8 +32,6 @@ public interface MessageAnalyzer {
 
 	public void doCheckpoint(boolean atEnd);
 
-	public void doSnapshot();
-
 	public long getStartTime();
 
 	public void initialize(long startTime, long duration, long extraTime);

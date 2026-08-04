@@ -115,37 +115,9 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 		}
 
 		for (MessageProcessor processor : m_processors) {
-			processor.close();
+			processor.shutdown();
 			super.release(processor);
 		}
-	}
-
-	@Override
-	public void flush(int hour) throws InterruptedException {
-		synchronized (this) {
-			while (true) {
-				boolean allEmpty = true;
-
-				for (BlockingQueue<MessageTree> queue : m_queues) {
-					if (!queue.isEmpty()) {
-						allEmpty = false;
-						break;
-					}
-				}
-
-				if (allEmpty) {
-					break;
-				}
-				TimeUnit.MILLISECONDS.sleep(1);
-			}
-
-			for (MessageProcessor processor : m_processors) {
-				processor.flush();
-			}
-
-			m_blockDumperManager.flush(hour);
-		}
-		m_bucketManager.flushBuckets(hour);
 	}
 
 	@Override
@@ -176,7 +148,7 @@ public class DefaultMessageDumper extends ContainerHolder implements MessageDump
 	}
 
 	@Override
-	public synchronized void process(MessageTree tree) {
+	public void process(MessageTree tree) {
 		MessageId id = tree.getFormatMessageId();
 		String domain = id.getDomain();
 		// hash by ip address and block hash by domain

@@ -27,11 +27,7 @@ public interface MessageConsumer {
 
 	public void doCheckpoint();
 
-	public void doSnapshot();
-
 	public List<MessageAnalyzer> getCurrentAnalyzer(String name);
 
 	public List<MessageAnalyzer> getLastAnalyzer(String name);
-
-	public void shutdownGracefully(long timeoutMillis);
 }

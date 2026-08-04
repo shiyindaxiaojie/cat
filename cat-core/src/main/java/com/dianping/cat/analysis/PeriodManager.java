@@ -37,7 +37,7 @@ public class PeriodManager implements Task {
 
 	private List<Period> m_periods = new ArrayList<Period>();
 
-	private volatile boolean m_active;
+	private boolean m_active;
 
 	@Inject
 	private MessageAnalyzerManager m_analyzerManager;
@@ -61,36 +61,23 @@ public class PeriodManager implements Task {
 	}
 
 	private void endPeriod(long startTime) {
-		Period matched = null;
+		int len = m_periods.size();
 
-		synchronized (m_periods) {
-			int len = m_periods.size();
+		for (int i = 0; i < len; i++) {
+			Period period = m_periods.get(i);
 
-			for (int i = 0; i < len; i++) {
-				Period period = m_periods.get(i);
-
-				if (period.isIn(startTime)) {
-					matched = period;
-					break;
-				}
-			}
-		}
-
-		if (matched != null) {
-			matched.finish();
-
-			synchronized (m_periods) {
-				m_periods.remove(matched);
+			if (period.isIn(startTime)) {
+				period.finish();
+				m_periods.remove(i);
+				break;
 			}
 		}
 	}
 
 	public Period findPeriod(long timestamp) {
-		synchronized (m_periods) {
-			for (Period period : m_periods) {
-				if (period.isIn(timestamp)) {
-					return period;
-				}
+		for (Period period : m_periods) {
+			if (period.isIn(timestamp)) {
+				return period;
 			}
 		}
 
@@ -138,47 +125,12 @@ public class PeriodManager implements Task {
 		m_active = false;
 	}
 
-	public void doSnapshot() {
-		List<Period> periods;
-
-		synchronized (m_periods) {
-			periods = new ArrayList<Period>(m_periods);
-		}
-
-		for (Period period : periods) {
-			period.doSnapshot();
-		}
-	}
-
-	public void shutdownAndCheckpoint(long timeoutMillis) {
-		m_active = false;
-		List<Period> periods;
-
-		synchronized (m_periods) {
-			periods = new ArrayList<Period>(m_periods);
-			m_periods.clear();
-		}
-
-		long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
-
-		for (Period period : periods) {
-			period.shutdownAndCheckpoint(Math.max(0, deadline - System.currentTimeMillis()));
-		}
-	}
-
 	private void startPeriod(long startTime) {
-		synchronized (m_periods) {
-			if (!m_active) {
-				return;
-			}
+		long endTime = startTime + m_strategy.getDuration();
+		Period period = new Period(startTime, endTime, m_analyzerManager, m_serverStateManager, m_serverConfigManager, m_logger);
 
-			long endTime = startTime + m_strategy.getDuration();
-			Period period = new Period(startTime, endTime, m_analyzerManager, m_serverStateManager,
-					m_serverConfigManager, m_logger);
-
-			m_periods.add(period);
-			period.start();
-		}
+		m_periods.add(period);
+		period.start();
 	}
 
 	private class EndTaskThread implements Task {

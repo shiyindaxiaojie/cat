@@ -74,7 +74,7 @@ public class DefaultBlockWriter implements BlockWriter {
 		m_latch = new CountDownLatch(1);
 	}
 
-	private synchronized void processBlock(String ip, Block block) {
+	private void processBlock(String ip, Block block) {
 		try {
 			Bucket bucket = m_bucketManager.getBucket(block.getDomain(), ip, block.getHour(), true);
 			boolean monitor = (++m_count) % 1000 == 0;
@@ -108,11 +108,6 @@ public class DefaultBlockWriter implements BlockWriter {
 	}
 
 	@Override
-	public synchronized void flush() {
-		// Acquiring this monitor waits for an in-flight block write to finish.
-	}
-
-	@Override
 	public void run() {
 		String ip = NetworkInterfaceManager.INSTANCE.getLocalHostAddress();
 
@@ -136,7 +131,7 @@ public class DefaultBlockWriter implements BlockWriter {
 	}
 
 	@Override
-	public void close() {
+	public void shutdown() {
 		m_enabled.set(false);
 
 		try {
@@ -153,11 +148,6 @@ public class DefaultBlockWriter implements BlockWriter {
 				break;
 			}
 		}
-	}
-
-	@Override
-	public void shutdown() {
-		// Closed by DefaultBlockDumper after all upstream queues have drained.
 	}
 
 }

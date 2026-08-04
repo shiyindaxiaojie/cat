@@ -74,32 +74,6 @@ public class ServerConfigManagerTest {
 		Assert.assertEquals(4 * 1024 * 1024, manager.getMaxMessageSize());
 	}
 
-	@Test
-	public void testCheckpointSettings() {
-		MockServerConfigManager manager = new MockServerConfigManager();
-
-		Assert.assertTrue(manager.isDailyCheckpointEnabled());
-		Assert.assertEquals(4, manager.getDailyCheckpointHour());
-		Assert.assertEquals(0, manager.getDailyCheckpointMinute());
-		Assert.assertEquals(25, manager.getGracefulShutdownTimeoutSeconds());
-
-		manager.setProperty("daily-checkpoint-enabled", "false");
-		manager.setProperty("daily-checkpoint-hour", "23");
-		manager.setProperty("daily-checkpoint-minute", "59");
-		manager.setProperty("graceful-shutdown-timeout-seconds", "60");
-		Assert.assertFalse(manager.isDailyCheckpointEnabled());
-		Assert.assertEquals(23, manager.getDailyCheckpointHour());
-		Assert.assertEquals(59, manager.getDailyCheckpointMinute());
-		Assert.assertEquals(60, manager.getGracefulShutdownTimeoutSeconds());
-
-		manager.setProperty("daily-checkpoint-hour", "24");
-		manager.setProperty("daily-checkpoint-minute", "-1");
-		manager.setProperty("graceful-shutdown-timeout-seconds", "0");
-		Assert.assertEquals(4, manager.getDailyCheckpointHour());
-		Assert.assertEquals(0, manager.getDailyCheckpointMinute());
-		Assert.assertEquals(25, manager.getGracefulShutdownTimeoutSeconds());
-	}
-
 	private static class MockServerConfigManager extends ServerConfigManager {
 		private Map<String, String> m_properties = new HashMap<String, String>();
 

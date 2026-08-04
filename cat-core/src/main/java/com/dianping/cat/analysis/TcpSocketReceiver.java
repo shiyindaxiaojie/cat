@@ -64,37 +64,19 @@ public final class TcpSocketReceiver implements LogEnabled {
 
 	private int m_maxMessageSize;
 
-	private boolean m_destroyed;
-
 	private final int m_port = 2280; // default port number from phone, C:2, A:2, T:8
 
-	public void destroy() {
-		destroy(m_serverConfigManager.getGracefulShutdownTimeoutSeconds() * 1000L);
-	}
-
-	public synchronized void destroy(long timeoutMillis) {
-		if (m_destroyed) {
-			return;
-		}
-		m_destroyed = true;
-		long deadline = System.currentTimeMillis() + Math.max(0, timeoutMillis);
-
+	public synchronized void destory() {
 		try {
 			m_logger.info("start shutdown socket, port " + m_port);
 			if (m_future != null) {
 				m_future.channel().close().syncUninterruptibly();
 			}
 			if (m_bossGroup != null) {
-				long remaining = Math.max(0, deadline - System.currentTimeMillis());
-
-				m_bossGroup.shutdownGracefully(0, remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
-				m_bossGroup.terminationFuture().awaitUninterruptibly(remaining);
+				m_bossGroup.shutdownGracefully();
 			}
 			if (m_workerGroup != null) {
-				long remaining = Math.max(0, deadline - System.currentTimeMillis());
-
-				m_workerGroup.shutdownGracefully(0, remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
-				m_workerGroup.terminationFuture().awaitUninterruptibly(remaining);
+				m_workerGroup.shutdownGracefully();
 			}
 			m_logger.info("shutdown socket success");
 		} catch (Exception e) {

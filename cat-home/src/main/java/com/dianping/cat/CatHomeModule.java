@@ -44,6 +44,8 @@ public class CatHomeModule extends AbstractModule {
 
 		Threads.forGroup("cat").start(reportReloadTask);
 
+		ctx.lookup(MessageConsumer.class);
+
 		if (serverConfigManager.isJobMachine()) {
 			DefaultTaskConsumer taskConsumer = ctx.lookup(DefaultTaskConsumer.class);
 
@@ -57,20 +59,13 @@ public class CatHomeModule extends AbstractModule {
 		}
 
 		final MessageConsumer consumer = ctx.lookup(MessageConsumer.class);
-		final TcpSocketReceiver messageReceiver = ctx.lookup(TcpSocketReceiver.class);
-		final long shutdownTimeoutMillis = serverConfigManager.getGracefulShutdownTimeoutSeconds() * 1000L;
-		Thread shutdownHook = new Thread("Cat-GracefulShutdown") {
+		Runtime.getRuntime().addShutdownHook(new Thread() {
 
 			@Override
 			public void run() {
-				long deadline = System.currentTimeMillis() + shutdownTimeoutMillis;
-
-				messageReceiver.destroy(Math.max(0, deadline - System.currentTimeMillis()));
-				consumer.shutdownGracefully(Math.max(0, deadline - System.currentTimeMillis()));
+				consumer.doCheckpoint();
 			}
-		};
-
-		Runtime.getRuntime().addShutdownHook(shutdownHook);
+		});
 	}
 
 	@Override
@@ -80,9 +75,17 @@ public class CatHomeModule extends AbstractModule {
 
 	@Override
 	protected void setup(ModuleContext ctx) throws Exception {
-		TcpSocketReceiver messageReceiver = ctx.lookup(TcpSocketReceiver.class);
+		final TcpSocketReceiver messageReceiver = ctx.lookup(TcpSocketReceiver.class);
 
 		messageReceiver.init();
+
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+
+			@Override
+			public void run() {
+				messageReceiver.destory();
+			}
+		});
 	}
 
 }
