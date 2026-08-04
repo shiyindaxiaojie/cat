@@ -29,8 +29,6 @@ determine_pod_ip() {
     local pod_ip
     if [[ -n "${POD_IP:-}" ]]; then
         echo "${POD_IP}"
-    elif [[ -n "${HOST_IP:-}" ]]; then
-        echo "${HOST_IP}"
     else
         pod_ip=$(hostname -i 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^([0-9]{1,3}\.){3}[0-9]{1,3}$/ && $i !~ /^127\./) { print $i; exit } }')
         if [[ -z "${pod_ip}" ]] && command -v ifconfig &>/dev/null; then
@@ -76,13 +74,12 @@ resolve_dns() {
 
 SERVER_URL="${SERVER_URL:-}"
 if [[ -z "${SERVER_URL}" ]]; then
-    echo "SERVER_URL not specified, using Pod IP"
     POD_IP=$(determine_pod_ip)
     if [[ -z "${POD_IP}" ]]; then
-        echo "ERROR: Unable to determine Pod IP. Please set SERVER_URL manually."
-        exit 1
+        POD_IP="127.0.0.1"
     fi
     SERVER_URL="${POD_IP}"
+    echo "SERVER_URL not specified; using local CAT endpoint: ${SERVER_URL}"
 fi
 
 declare -a FINAL_ENDPOINTS=()

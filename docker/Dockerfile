@@ -21,7 +21,6 @@ ENV MYSQL_PORT "3306"
 ENV MYSQL_USERNAME ""
 ENV MYSQL_PASSWORD ""
 ENV MYSQL_SCHEMA "cat"
-ENV SERVER_URL ""
 ENV RESOLVE_SERVER_URL "N"
 
 COPY cat-home/target/cat-home.war /usr/local/tomcat/webapps/cat.war

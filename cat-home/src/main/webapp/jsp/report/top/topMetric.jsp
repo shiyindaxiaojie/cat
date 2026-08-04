@@ -16,18 +16,23 @@
 		min-width: 150px;
 		font-size: 13px;
 		background: #fff;
-		border: 1px solid #e7edf3;
+		border: 1px solid #d8e1ea;
 		border-radius: 5px;
 		border-spacing: 0;
-		box-shadow: 0 1px 2px rgba(30, 55, 80, 0.05);
+		box-shadow: 0 2px 5px rgba(30, 55, 80, 0.08);
 		overflow: hidden;
 	}
 	.top-metric-card th,
 	.top-metric-card td {
 		padding: 6px 9px;
 		border: 0;
-		border-bottom: 1px solid #f0f3f6;
+		border-right: 1px solid #e5ebf1;
+		border-bottom: 1px solid #e5ebf1;
 		line-height: 20px;
+	}
+	.top-metric-card th:last-child,
+	.top-metric-card td:last-child {
+		border-right: 0;
 	}
 	.top-metric-card tr:last-child td {
 		border-bottom: 0;
