@@ -151,29 +151,30 @@ case "${GC_MODE:-G1}" in
         ;;
 esac
 
-mkdir -p -- "${HOME}/applogs"
+JVM_LOG_HOSTNAME=${HOSTNAME:-}
+if [[ -z "${JVM_LOG_HOSTNAME}" ]]; then
+    JVM_LOG_HOSTNAME=$(hostname 2>/dev/null || true)
+fi
+JVM_LOG_HOSTNAME=${JVM_LOG_HOSTNAME//[^[:alnum:]._-]/_}
+JVM_LOG_HOSTNAME=${JVM_LOG_HOSTNAME:-unknown-host}
+JVM_LOG_DIR="${HOME}/applogs/${JVM_LOG_HOSTNAME}"
+
+mkdir -p -- "${JVM_LOG_DIR}"
 
 if [[ "${USE_GC_LOG:-Y}" == "Y" ]]; then
-    validate_positive_integer GC_LOG_FILE_COUNT "${GC_LOG_FILE_COUNT:-5}"
-    validate_size GC_LOG_FILE_SIZE "${GC_LOG_FILE_SIZE:-50M}"
-
+    echo "GC logs will be written to '${JVM_LOG_DIR}/jvm_gc.log'."
     if [[ "${JAVA_MAJOR_VERSION}" -gt 8 ]]; then
-        echo "GC logs will be written to '${HOME}/applogs/jvm_gc-%p-%t.log'."
-        append_java_opt "-Xlog:gc:file=${HOME}/applogs/jvm_gc-%p-%t.log:time,uptime,level,tags:filecount=${GC_LOG_FILE_COUNT:-5},filesize=${GC_LOG_FILE_SIZE:-50M}"
+        append_java_opt "-Xlog:gc*:file=${JVM_LOG_DIR}/jvm_gc.log:time,uptime,level,tags"
     else
-        echo "GC logs will be written to '${HOME}/applogs/jvm_gc.log'."
-        append_java_opt "-Xloggc:${HOME}/applogs/jvm_gc.log"
+        append_java_opt "-Xloggc:${JVM_LOG_DIR}/jvm_gc.log"
         append_java_opt "-XX:+PrintGCDetails"
         append_java_opt "-XX:+PrintGCDateStamps"
-        append_java_opt "-XX:+UseGCLogFileRotation"
-        append_java_opt "-XX:NumberOfGCLogFiles=${GC_LOG_FILE_COUNT:-5}"
-        append_java_opt "-XX:GCLogFileSize=${GC_LOG_FILE_SIZE:-50M}"
     fi
 fi
 
 if [[ "${USE_HEAP_DUMP:-Y}" == "Y" ]]; then
-    echo "Heap dumps will be written to '${HOME}/applogs/jvm_heap_dump.hprof'."
-    append_java_opt "-XX:HeapDumpPath=${HOME}/applogs/jvm_heap_dump.hprof"
+    echo "Heap dumps will be written to '${JVM_LOG_DIR}/jvm_heap_dump.hprof'."
+    append_java_opt "-XX:HeapDumpPath=${JVM_LOG_DIR}/jvm_heap_dump.hprof"
     append_java_opt "-XX:+HeapDumpOnOutOfMemoryError"
 fi
 

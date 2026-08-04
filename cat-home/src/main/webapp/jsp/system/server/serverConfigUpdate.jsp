@@ -49,43 +49,57 @@
     <div class="cat-alarm-tip">
         <div class="cat-alarm-tip-container">
             <h4>配置说明：</h4>
-            <p><strong>server.properties（顺序与默认配置一致）</strong></p>
-            <p>* local-mode：本地开发模式；启用后不访问 HDFS，并把报表查询线程固定为 5，不建议生产环境开启。默认 false。</p>
-            <p>* job-machine：是否执行报表汇总、清理等定时任务；集群中通常只让少量节点承担。默认 false。</p>
-            <p>* send-machine：是否承担通知发送任务。默认 false。</p>
-            <p>* alarm-machine：是否执行告警计算任务；集群中应避免所有节点重复计算告警。默认 false。</p>
-            <p>* hdfs-enabled：是否启用 HDFS 存储；设置为 false 时使用本地目录。默认 false。</p>
-            <p>* remote-servers：CAT 控制台节点列表，格式为 host:HTTP端口，多个节点用英文逗号分隔；用于跨节点查询和跳转。</p>
-            <p>* netty-boss-threads：TCP 连接接收线程数，通常设置为 1；修改后需要重启。</p>
-            <p>* netty-worker-threads：TCP 网络读写和消息解码线程数；1 核 Pod 设置为 1，2 至 4 核通常设置为 2 至 4；修改后需要重启。</p>
-            <p>* report-query-threads：并行读取和合并 Transaction、Event 等报表模型的线程数，不参与消息接收或实时分析；修改后需要重启。</p>
-            <p>* max-message-size：单条 TCP 消息允许的最大字节数，默认 4194304（4 MiB）；超限消息会被拒绝，修改后需要重启。</p>
-            <p>* graceful-shutdown-timeout-seconds：收到 SIGTERM 后停止 TCP 接收、排空分析队列并最终落盘的最长时间，默认 25 秒；应小于 Pod 的 terminationGracePeriodSeconds。</p>
-            <p>* daily-checkpoint-enabled：是否启用每天在线快照；快照不会停止 TCP 接收，也不会关闭当前小时存储。默认 true。</p>
-            <p>* daily-checkpoint-hour：每天在线快照的小时，取值 0 至 23，默认 4。</p>
-            <p>* daily-checkpoint-minute：每天在线快照的分钟，取值 0 至 59，默认 0。</p>
-            <p>* message-processor-thread：将消息写入本地或 HDFS 的持久化线程数，默认 8；每个线程有独立队列，修改后需要重启。</p>
-            <p>* message-processor-queue-size：每个持久化线程的队列容量，默认 5000 条；所有队列总容量约等于线程数乘以该值，队列满时新消息会被丢弃。</p>
-            <p>* realtime-analyzer-queue-capacity-per-thread：每个实时分析器工作线程的默认队列容量，默认 10000 条；下一个整点创建新分析任务时生效，无需重启。</p>
-            <p>* top-analyzer-enable：是否启用监控大盘分析，按分钟汇总各应用的错误类型和错误机器排行。默认 true。</p>
-            <p>* business-analyzer-enable：是否启用业务指标分析，聚合客户端上报的 Metric 业务指标。默认 true。</p>
-            <p>* matrix-analyzer-enable：是否启用性能报告分析，统计 URL、Service、RPC 等调用的成功率和耗时分布。默认 true。</p>
-            <p>* storage-analyzer-enable：是否启用存储调用分析，统计数据库、缓存等调用的次数、耗时和错误情况。默认 true。</p>
-            <p>* dependency-analyzer-enable：是否启用服务依赖分析，分析应用与数据库、缓存、服务等下游资源之间的依赖关系。默认 true。</p>
+            <p><strong>基本配置</strong></p>
+            <p>* local-mode：仅用于本地开发。设置为 true 后使用本地存储，并将报表查询线程固定为 5；生产环境应保持 false。</p>
+            <p>* job-machine：执行报表汇总、统计和数据清理等后台任务。集群中通常只为一个或少量节点设置为 true。</p>
+            <p>* send-machine：发送告警通知。集群中通常只为承担通知发送职责的节点设置为 true。</p>
+            <p>* alarm-machine：执行告警规则计算。集群中应避免多个节点重复计算同一批告警。</p>
+            <p>* consumer-machine：接收并实时分析客户端消息。设置为 false 后该节点不监听 TCP 2280 端口，可作为纯控制台或任务节点；修改后需要重启。</p>
+            <p>* hdfs-enabled：是否启用 HDFS 存储。设置为 false 时使用 local-base-dir 指定的本地目录。</p>
+            <p>* remote-servers：CAT 控制台集群地址，格式为 host:HTTP端口，多个地址使用英文逗号分隔，例如 10.0.0.1:8080,10.0.0.2:8080。</p>
+            <p>* netty-boss-threads：TCP 连接接收线程数，通常保持 1；控制节点关闭 consumer-machine 后不会创建该线程。</p>
+            <p>* netty-worker-threads：TCP 网络读写和消息解码线程数。auto 会综合 cgroup 和 JVM CPU 信息，自动值最多为 4；Kubernetes 中无法读取 cgroup 时回退为 1。需要超过 4 个线程时应显式填写整数，修改后需要重启。</p>
+            <p>* report-query-threads：报表查询、读取和模型合并的并发线程数，默认 8；调大后会增加数据库、磁盘和 CPU 压力，修改后需要重启。</p>
+            <p>* max-message-size：单条 TCP 消息的字节上限，默认 4194304（4 MiB），最大允许 64 MiB；超限消息会被拒绝，修改后需要重启。</p>
+            <p>* graceful-shutdown-timeout-seconds：收到 SIGTERM 后停止接收消息、排空分析队列并完成最终落盘的超时时间，默认 25 秒；应小于 Pod 的 terminationGracePeriodSeconds。</p>
+            <p>* daily-checkpoint-enabled：是否启用每日在线快照，默认 true。快照会刷新报表和原始消息文件，但不会停止消息接收或关闭当前小时存储。</p>
+            <p>* daily-checkpoint-hour：每日在线快照的执行小时，取值 0 至 23，默认 4。</p>
+            <p>* daily-checkpoint-minute：每日在线快照的执行分钟，取值 0 至 59，默认 0。</p>
+            <p>* message-processor-thread：消息持久化线程数，默认 8。每个线程拥有独立队列；调大后会增加内存、磁盘和线程开销，修改后需要重启。</p>
+            <p>* message-processor-queue-size：每个持久化线程的队列容量，默认 5000 条。总容量约为线程数乘以该值；队列满时新消息会被丢弃。</p>
 
-            <p><strong>分析器通用扩展项</strong></p>
-            <p>* {name}-analyzer-queue-capacity-per-thread：单独覆盖指定分析器每个线程的队列容量，例如 transaction-analyzer-queue-capacity-per-thread。</p>
-            <p>* {name}-analyzer-threads：指定分析器线程数，默认 2；下一个整点创建新分析任务时生效。</p>
+            <p><strong>分析器配置</strong></p>
+            <p>* realtime-analyzer-queue-capacity-per-thread：每个实时分析器工作线程的默认队列容量，默认 10000 条。每个分析器实例都有独立队列，调大后总内存占用会成倍增加；下一个整点生效。</p>
+            <p>* top-analyzer-enable：监控大盘分析开关，按分钟汇总应用错误和错误机器排行。</p>
+            <p>* business-analyzer-enable：业务指标分析开关，聚合客户端上报的 Metric 指标。</p>
+            <p>* matrix-analyzer-enable：性能报告分析开关，统计 URL、Service、RPC 等调用的成功率和耗时分布。</p>
+            <p>* storage-analyzer-enable：存储调用分析开关，统计数据库、缓存等调用的次数、耗时和错误。</p>
+            <p>* dependency-analyzer-enable：服务依赖分析开关，分析应用与数据库、缓存、服务等下游资源的依赖关系。</p>
 
-            <p><strong>storage / consumer</strong></p>
-            <p>* local-base-dir：本地数据存储目录。</p>
-            <p>* max-hdfs-storage-time：HDFS 数据最长保留时间，单位为天。</p>
-            <p>* local-report-storage-time：本地报表保留时间，单位为天。</p>
-            <p>* local-logivew-storage-time：本地原始日志保留时间，单位为天。</p>
-            <p>* har-mode：是否启用 HAR 归档模式。</p>
-            <p>* upload-thread：上传 HDFS 的并发线程数。</p>
-            <p>* hdfs / harfs：远程存储配置；max-size 为文件最大尺寸，server-uri 为服务地址，base-dir 为存储目录。</p>
-            <p>* long-config：Transaction、SQL、Service 的默认慢调用阈值；可使用 domain 子项为指定应用单独覆盖。</p>
+            <p><strong>存储配置</strong></p>
+            <p>* local-base-dir：本地消息和报表文件的存储根目录；容器部署时应挂载持久卷。</p>
+            <p>* max-hdfs-storage-time：HDFS 数据保留天数。</p>
+            <p>* local-report-storage-time：本地报表保留天数。</p>
+            <p>* local-logivew-storage-time：本地原始消息日志保留天数。</p>
+            <p>* har-mode：是否将历史 HDFS 文件归档为 HAR，以减少小文件数量。</p>
+            <p>* upload-thread：本地文件上传到 HDFS 的并发线程数；调大后会增加网络、磁盘和 HDFS 压力。</p>
+            <p>* hdfs：HDFS 写入配置。max-size 为单文件最大尺寸，server-uri 为 HDFS 地址，base-dir 为写入目录。</p>
+            <p>* harfs：HAR 归档读取配置。max-size 为单文件最大尺寸，server-uri 为 HAR 地址，base-dir 为归档目录。</p>
+            <p>* hadoop.security.authentication：是否启用 Hadoop 安全认证。</p>
+            <p>* dfs.namenode.kerberos.principal：NameNode 的 Kerberos Principal。</p>
+            <p>* dfs.cat.kerberos.principal：CAT 服务使用的 Kerberos Principal。</p>
+            <p>* dfs.cat.keytab.file：CAT 服务的 Kerberos keytab 文件路径。</p>
+            <p>* java.security.krb5.realm：Kerberos Realm。</p>
+            <p>* java.security.krb5.kdc：Kerberos KDC 地址。</p>
+
+            <p><strong>慢调用阈值</strong></p>
+            <p>* default-url-threshold：URL/Transaction 默认慢调用阈值，单位为毫秒。</p>
+            <p>* default-sql-threshold：SQL 默认慢调用阈值，单位为毫秒。</p>
+            <p>* default-service-threshold：Service/RPC 默认慢调用阈值，单位为毫秒。</p>
+            <p>* domain：为指定应用覆盖 url-threshold、sql-threshold 和 service-threshold；未填写的值继续使用默认阈值。</p>
+
+            <p><strong>集群节点覆盖</strong></p>
+            <p>* default 节点保存全局默认配置；其他 server 节点只填写需要覆盖的 property，例如为指定节点开启 job-machine、send-machine 或 alarm-machine。</p>
         </div>
     </div>
 
