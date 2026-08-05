@@ -18,6 +18,16 @@
 	  border-collapse: collapse;
 	  border-spacing: 0;
 	}
+	.dashboard-topology-panel {
+		width: 100%;
+		height: 100%;
+		background: #fff;
+		border: 1px solid #d4dee8;
+		border-radius: 5px;
+		box-shadow: 0 1px 3px rgba(30, 55, 80, 0.06);
+		box-sizing: border-box;
+		overflow: hidden;
+	}
 </style>
  <c:choose>
 	<c:when test="${payload.fullScreen}">
@@ -33,7 +43,7 @@
 		<res:useJs value="${res.js.local['startopo.js']}" target="head-js" />
 		<div class="report">
 			<div id="fullScreenData">
-				<div class="text-center" id="container" style="width:100%;height:100%;border:solid 1px #ccc;"></div>
+				<div class="text-center dashboard-topology-panel" id="container"></div>
 				<br/>
 			</div>
 	    </div>
@@ -51,7 +61,7 @@
 			 		<%@ include file="dependencyTimeNav.jsp"%>
 			</div></div>
 			<div id="fullScreenData">
-				<div class="text-center" id="container" style="width:100%;height:100%;border:solid 1px #ccc;"></div>
+				<div class="text-center dashboard-topology-panel" id="container"></div>
 				<br/>
 			</div>
 	    </div>
@@ -95,6 +105,10 @@
 				//小方块间的间隔比率
 				blockPaddingRatio: 0.2,
 	            leftTitlePaddingRatio: 0.05,
+				gridStroke:'#cbd5df',
+				gridStrokeWidth:1,
+				nodeStroke:'#637384',
+				nodeStrokeWidth:1,
 				showLeft: false,
 				showUp: true
 			};
