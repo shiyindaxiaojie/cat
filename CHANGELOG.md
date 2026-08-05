@@ -1,72 +1,103 @@
-# Changelog
+# 更新日志
+
+本文档按版本倒序记录重要功能、体验改进、问题修复与数据库脚本。升级前请优先关注当前版本的“修复”和“脚本”说明。
+
+## 3.4.3 (2026-08-03)
+
+### 新增
+
+- 服务端配置扩展 Netty、消息队列与线程数参数，支持按节点负载调整
+- 实时分析器开关和队列容量支持服务端配置
+- Docker 运行时增强 GC 参数模板与堆大小校验
+- 内置数据定时持久化，不需要调用 `/cat/r/home?op=checkpoint` 转储内存数据
+
+### 优化
+
+- 优化 Kubernetes 资源识别、优雅停机与日志落盘流程
+- 统一监控大盘的卡片、分组线和状态节点样式
+
+### 修复
+
+- 修复启动时 JVM 参数未正确生效的问题
+- 修复检查点初始化及 MySQL Connector/J 驱动兼容问题
+
+## 3.4.2 (2025-05-14)
+
+### 优化
+
+- 优化 CAT 集群部署
+
+### 修复
+
+- 修复 MySQL 8 兼容性问题
 
 ## 3.4.1 (2024-08-27)
 
-### FEATURES
+### 新增
 
 - 新增 JVM 内置参数，支持 G1、CMS、ZGC 垃圾回收器
 
-### BUGFIX
+### 修复
 
 - 修复 `HeartBeat` 监控告警交互问题
 - 修复 Jira Software 兼容性问题
-- 修复飞书和钉钉告警配置问题 
+- 修复飞书和钉钉告警配置问题
 
 ## 3.4.0 (2024-05-01)
 
-### FEATURES
+### 新增
 
 - 支持告警自动录入 Jira Software
 
-### SCRIPTS
+### 脚本
 
 - docs/scripts/cat-upgrade-3.4.0.sql
 
 ## 3.3.2 (2024-01-26)
 
-### BUGFIX
+### 修复
 
 - 修复 Docker 环境下配置 CAT 集群的问题
 
 ## 3.3.1 (2023-09-07)
 
-### BUGFIX
+### 修复
 
 - 修复 `Server`、`Browser`、`Mobile` 监控跳转交互问题
 
 ## 3.3.0 (2023-06-30)
 
-### FEATURES
+### 新增
 
 - 新增 `Server`、`Browser`、`Mobile` 视图
 
-### SCRIPTS
+### 脚本
 
 - docs/scripts/cat-upgrade-3.3.0.sql
 
-### IMPROVEMENTS
+### 优化
 
 - 优化消息树详情展示滚动条交互
 
 ## 3.2.0 (2023-04-04)
 
-### FEATURES
+### 新增
 
 - 支持邮件、钉钉、企业微信、飞书机器人推送，无需部署额外资源
 - 新增应用大盘、数据库大盘、缓存大盘、服务大盘告警
 
-### IMPROVEMENTS
+### 优化
 
 - 优化 `Business`、`Exception`、`HeartBeat`、`Transaction`、`Event` 告警类型
 
 ## 3.1.0 (2023-03-03)
 
-### FEATURES
+### 新增
 
 - 新增链路跟踪，支持 `traceId` 检索（建议客户端集成 [`eden-architect`](https://github.com/shiyindaxiaojie/eden-architect.git) 框架）
 - 新增服务 `Matrix` 性能报告
 
-### IMPROVEMENTS
+### 优化
 
 - 界面美化，遵循 Bootstrap 风格
 - 中文汉化，适合初学者入门
