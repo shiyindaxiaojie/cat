@@ -8,41 +8,52 @@
 
 # CAT 实时监控平台
 
-![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/maven-ci.yml/badge.svg?branch=3.1.x)][github-action] [<img src="https://api.gitsponsors.com/api/badge/img?id=414157707" height="20">](https://api.gitsponsors.com/api/badge/link?p=0lg65q7dB02AD42w0efoIlchLxkV2cxrueMbg4A8gk7J+U2lUkH4+6z+XlObMVpe3jts2mZcgZS2LwduRv5p9cwivKWG0uo0LvfEQaMwE1ySl63XTqYgB56b20XfMyXHr9yYvnHCPYtxDq89eA+AJQ==)
+> 面向企业级生产环境的增强发行版，聚焦稳定运行、容器化部署、链路追踪与告警闭环。
 
-CAT 是美团点评开源的实时应用监控平台，提供了 `Tracsaction`、`Event`、`Problem`、`Business` 等丰富的指标项。在实际的生产需求中，笔者进行了部分扩展：
-1. 链路跟踪：通过日志的链路ID 搜索消息树，定位问题更高效。
-2. 告警优化：支持邮件、钉钉、微信、飞书机器人推送，无需部署额外资源。
-3. 组件扩展：新增应用大盘、数据库大盘、缓存大盘、服务大盘告警。
-4. 工单集成：支持告警自动录入 Jira Software，提高问题处理效率。
+简体中文 | [English](README-en.md)
 
-本项目已投入生产使用，如果您有使用上的问题，欢迎查阅我的[笔记](https://mengxiangge.netlify.app/2024/05/01/%E6%96%B0%E6%89%8B%E5%BF%85%E7%9C%8B%EF%BC%8110%E5%88%86%E9%92%9F%E5%B8%A6%E4%BD%A0%E8%A7%A3%E5%86%B3%20cat%20%E4%BD%BF%E7%94%A8%E9%97%AE%E9%A2%98%E3%80%82/) 。
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/release.yml/badge.svg?branch=release)][github-action] [![](https://img.shields.io/docker/pulls/shiyindaxiaojie/cat-home?label=Docker%20Pulls)](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)
 
-## 演示图例
+CAT 是美团点评开源的实时应用监控平台。笔者在保留原有 `Transaction`、`Event`、`Problem`、`Business` 等核心能力和使用习惯的基础上，面向真实生产场景持续增强链路排障、告警协同、监控大盘与容器化部署体验。
 
-### 风格美化
+- **链路排障更高效**：根据日志中的 Trace ID 检索完整消息树，串联 HTTP、RPC、SQL、缓存与业务日志。
+- **告警渠道开箱即用**：支持邮件、钉钉、企业微信和飞书机器人，无需为消息转发额外部署服务。
+- **监控全景更直观**：增强应用、数据库、缓存和服务大盘，并提供相应告警能力。
+- **故障处理有闭环**：告警可自动录入 Jira Software，减少人工转派和跟进成本。
+
+本项目已在生产环境持续运行。首次接入或排查常见问题时，可查阅[实践笔记](https://mengxiangge.netlify.app/article/github/cat-add-tracing-alerting)。
+
+**快速导航**：[功能预览](#功能预览) · [构建项目](#构建项目) · [本地启动](#本地启动) · [部署方式](#部署方式) · [客户端接入](#客户端接入) · [更新日志](CHANGELOG.md)
+
+## 功能预览
+
+### 更清晰的监控界面
 
 改造前：
+
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/dashboard-old.png)
 
 改造后：
+
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/dashboard.png)
 
-### 链路跟踪（New）
+### 链路跟踪
 
-通过日志打印的 TraceId 查找整个请求路径的 HTTP 请求耗时、RPC 调用情况、Log4j2 业务日志、SQL 和缓存执行耗时。
+通过日志中的 Trace ID 还原完整请求路径，集中查看 HTTP 请求耗时、RPC 调用、Log4j2 业务日志、SQL 与缓存执行情况。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/tracing.png)
 
-### 告警监控（New）
+### 多渠道告警
 
-支持邮件、钉钉、微信、飞书机器人推送，无需部署额外资源。
+支持邮件、钉钉、企业微信和飞书机器人推送，帮助团队快速接入现有协作流程。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/dingtalk.png)
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/mail.png)
 
-### 大盘优化（New）
+### 生产视角大盘
+
+从应用、数据库、缓存和 RPC 服务等视角集中展示系统状态，更容易发现异常节点和影响范围。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/app-dashboard.png)
 
@@ -52,7 +63,7 @@ CAT 是美团点评开源的实时应用监控平台，提供了 `Tracsaction`�
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/rpc-dashboard.png)
 
-### 其他优化
+### 更多监控视图
 
 #### Transaction
 
@@ -64,7 +75,7 @@ CAT 是美团点评开源的实时应用监控平台，提供了 `Tracsaction`�
 
 #### Business
 
-相对于 Transaction 和 Event 更宏观的指标，需要业务自己埋点。
+Business 适合展示比 Transaction 和 Event 更宏观的业务指标，需要应用侧主动埋点。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/business.png)
 
@@ -79,13 +90,13 @@ public Response listAsset(Cust cust) {
 
 #### Matrix
 
-统计所有接口的性能情况
+汇总接口的调用量、成功率和耗时分布。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/matrix.png)
 
 #### Cross
 
-可以搜索某个 RPC 接口被调用的情况
+检索指定 RPC 接口的调用方、调用量与执行情况。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/rpc.png)
 
@@ -107,21 +118,21 @@ public Response listAsset(Cust cust) {
 
 #### State
 
-查看当前 CAT 和应用节点的状态
+查看当前 CAT 服务端与应用节点的运行状态。
 
 ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/state.png)
 
-## 如何构建
+## 构建项目
 
 本项目默认使用 Maven 来构建，最快的使用方式是 `git clone` 到本地。在项目的根目录执行 `mvn install -T 4C` 完成本项目的构建。
 
-## 如何启动
+## 本地启动
 
 ### IDEA 启动
 
 1. 在用户目录创建文件夹 `~/.cat/appdatas/cat`，拷贝本项目的 `docs/config` 到该目录下
 2. 修改 `docs/config/datasources.xml` 的数据库连接信息
-3. 在上述目标数据源执行 `scripts/cat-init-3.3.0.sql` 初始化
+3. 在上述目标数据源执行 `docs/scripts/cat-init-3.4.0.sql` 初始化
 4. 检查 `cat-home` 模块已正确设置了 Facet
    ![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/cat/idea-cat-home-facet.png)
 5. 使用 IDEA 配置 Tomcat 服务器，请注意，多网卡情况下可能会出现 `CAT服务端异常:[127.0.0.1]`，请设置 JVM 启动参数 `host.ip` 指定 IP。
@@ -132,15 +143,23 @@ public Response listAsset(Cust cust) {
 
 ### Docker 启动
 
-本项目已发布到 [Docker Hub](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)，请参考以下命令运行。
+本项目已发布到 [Docker Hub](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)，配置数据库连接后即可启动：
 
-	```bash
-	docker run -e MYSQL_URL="127.0.0.1" -e MYSQL_PORT="3306" -e MYSQL_SCHEMA="cat" -e MYSQL_USERNAME="" -e MYSQL_PASSWD="" -p 8080:8080 --name=cat-home -d shiyindaxiaojie/cat-home
-	```
+```bash
+docker run \
+  -e MYSQL_URL="127.0.0.1" \
+  -e MYSQL_PORT="3306" \
+  -e MYSQL_SCHEMA="cat" \
+  -e MYSQL_USERNAME="" \
+  -e MYSQL_PASSWORD="" \
+  -p 8080:8080 \
+  --name cat-home \
+  -d shiyindaxiaojie/cat-home
+```
 
-## 如何部署
+## 部署方式
 
-> 注意：除了 Helm 部署，在停止 CAT 进程之前最好调用 `curl http://localhost:8080/cat/r/home?op=checkpoint` ，将内存数据持久化磁盘，避免重启后丢失。
+> **停机保护：**当前 Docker/Helm 部署已集成优雅停机处理。使用传统 Tomcat 或自定义启动方式时，建议在停止 CAT 前调用 `curl http://localhost:8080/cat/r/home?op=checkpoint`，先将内存中的数据持久化到磁盘。从 3.4.3 版本开始，系统内部会定时持久化数据，不再需要调用此接口。
 
 ### Tomcat 部署
 
@@ -148,13 +167,13 @@ public Response listAsset(Cust cust) {
 
 ### Docker 部署
 
-在项目根目录执行 `docker build -f docker/Dockerfile cat:{tag} .` 打包为镜像。
+在项目根目录执行 `docker build -f docker/Dockerfile -t cat:{tag} .` 构建镜像。
 
 ### Helm 部署
 
-进入 `helm` 目录，执行 `helm install -n cat cat .` 安装，在 K8s 环境将自动创建 CAT 所需的资源文件。
+进入 `helm` 目录，执行 `helm install -n cat --create-namespace cat .` 安装，在 Kubernetes 环境中自动创建 CAT 所需的资源。
 
-## 如何接入
+## 客户端接入
 
 为了减少客户端集成的工作，您可以使用 [eden-architect](https://github.com/shiyindaxiaojie/eden-architect) 框架，只需要两步就可以完成 CAT 的集成。
 
