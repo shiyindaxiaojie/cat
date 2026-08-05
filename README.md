@@ -8,11 +8,11 @@
 
 # CAT 实时监控平台
 
-> 面向企业级生产环境的增强发行版，聚焦稳定运行、容器化部署、链路追踪与告警闭环。
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/release.yml/badge.svg?branch=release)][github-action] [![](https://img.shields.io/docker/pulls/shiyindaxiaojie/cat-home?label=Docker%20Pulls)](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)
 
 简体中文 | [English](README-en.md)
 
-![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/release.yml/badge.svg?branch=release)][github-action] [![](https://img.shields.io/docker/pulls/shiyindaxiaojie/cat-home?label=Docker%20Pulls)](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)
+> 面向企业级生产环境的增强发行版，聚焦稳定运行、容器化部署、链路追踪与告警闭环。
 
 CAT 是美团点评开源的实时应用监控平台。笔者在保留原有 `Transaction`、`Event`、`Problem`、`Business` 等核心能力和使用习惯的基础上，面向真实生产场景持续增强链路排障、告警协同、监控大盘与容器化部署体验。
 
