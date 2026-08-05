@@ -8,11 +8,11 @@
 
 # CAT Real-Time Monitoring Platform
 
-> An enhanced distribution for enterprise production environments, focused on operational stability, containerized deployment, request tracing, and closed-loop alert management.
+![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/release.yml/badge.svg?branch=release)][github-action] [![](https://img.shields.io/docker/pulls/shiyindaxiaojie/cat-home?label=Docker%20Pulls)](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)
 
 English | [简体中文](README.md)
 
-![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/language-java-blue.svg) [![](https://cdn.jsdelivr.net/gh/shiyindaxiaojie/images/readme/license-apache2.0-red.svg)][license-apache2.0] [![](https://github.com/shiyindaxiaojie/cat/actions/workflows/release.yml/badge.svg?branch=release)][github-action] [![](https://img.shields.io/docker/pulls/shiyindaxiaojie/cat-home?label=Docker%20Pulls)](https://hub.docker.com/repository/docker/shiyindaxiaojie/cat-home)
+> An enhanced distribution for enterprise production environments, focused on operational stability, containerized deployment, request tracing, and closed-loop alert management.
 
 CAT is a real-time application monitoring platform open-sourced by Meituan-Dianping. While preserving CAT's familiar core capabilities, including `Transaction`, `Event`, `Problem`, and `Business`, this project adds production-oriented improvements for request troubleshooting, alert collaboration, monitoring dashboards, and containerized deployment.
 
