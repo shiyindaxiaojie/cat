@@ -582,6 +582,10 @@
             paddingInside:10,
             leftTitlePaddingRatio: 0.1,
             blockPaddingRatio: 0.4,
+			gridStroke:'#cbd5df',
+			gridStrokeWidth:1,
+			nodeStroke:'#637384',
+			nodeStrokeWidth:1,
             //paddingLeft:50,
 			sideWeight:function(weight){
 				//weight ==> px
@@ -617,7 +621,8 @@
             this._nodeWidth = nodeWidth;
             self.stage.path().attr({
                 path:['M',0,40,'h',self.container.clientWidth],
-                stroke:1
+				stroke:option.gridStroke,
+				'stroke-width':option.gridStrokeWidth
             });
         },
         _initNodes:function(){
@@ -725,7 +730,10 @@
                         node.position(startX+x, startY+y);
                         node.text(nodeData.id);
                         node.color(option.colorMap[nodeData.status])
-                        node.node.attr('stroke-width',2);
+						node.node.attr({
+							stroke:option.nodeStroke,
+							'stroke-width':option.nodeStrokeWidth
+						});
                         node.node.mouseover(function(e){
                         Tip.show(nodeData.des,e.pageX+15,e.pageY+15);
                         }).mouseout(function(){
@@ -758,7 +766,8 @@
                     if(gridIndex%option.col==option.col-1){
                         self.stage.path().attr({
                             path:['M',0,maxY,'h',self.container.clientWidth],
-                            stroke:1
+							stroke:option.gridStroke,
+							'stroke-width':option.gridStrokeWidth
                         });
                     }
                    
@@ -774,12 +783,14 @@
             this.stage.setSize(this.container.clientWidth,maxY+30); 
             self.stage.path().attr({
                 path:['M',0,this.container.clientHeight-10,'h',self.container.clientWidth],
-                stroke:1
+				stroke:option.gridStroke,
+				'stroke-width':option.gridStrokeWidth
             });
             for(var i=0;i<option.col-1;i++){
                 this.stage.path().attr({
                     path:['M',colWidth*(i+1),40,'v',self.container.clientHeight-50],
-                    stroke:1
+					stroke:option.gridStroke,
+					'stroke-width':option.gridStrokeWidth
                 });
             }
 
